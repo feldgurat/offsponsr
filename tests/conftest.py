@@ -13,7 +13,7 @@ from offsponsr.sponsr import SponsrClient
 from offsponsr.sync.events import EventBus
 from offsponsr.sync.service import SyncService
 
-from .fakes import FakeFolderPicker, FakeLoginWindow, FakeSponsr, MemoryKeyring
+from .fakes import FakeFolderPicker, FakeLoginWindow, FakeShell, FakeSponsr, MemoryKeyring
 
 LAUNCH_TOKEN = 'launch-token'
 
@@ -122,8 +122,13 @@ def downloads(libraries, account, events, ffmpeg_path, monkeypatch):
 
 
 @pytest.fixture
-def services(libraries, account, sync_service, downloads, events, folder_picker):
-    services = Services(libraries, account, sync_service, downloads, events, folder_picker)
+def shell():
+    return FakeShell()
+
+
+@pytest.fixture
+def services(libraries, account, sync_service, downloads, events, folder_picker, config_store, shell):
+    services = Services(libraries, account, sync_service, downloads, events, folder_picker, config_store, shell)
     yield services
     # Before the `libraries` fixture closes the library the sync may still be writing to.
     services.shutdown()

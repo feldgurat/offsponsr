@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Self
 
@@ -9,12 +9,17 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from offsponsr import __version__
 from offsponsr.api.account import account_router
+from offsponsr.api.files import media_files_router, shell_router
 from offsponsr.api.library import FolderPicker, library_router
+from offsponsr.api.posts import posts_router
 from offsponsr.api.projects import projects_router
 from offsponsr.api.session import SESSION_COOKIE, SessionGate
+from offsponsr.api.settings import settings_router
 from offsponsr.auth import AccountService, AuthError, InvalidCookieError, SiteUnavailableError
+from offsponsr.config import ConfigStore
 from offsponsr.library import LibraryError, LibraryManager
 from offsponsr.media.downloader import DownloadService
+from offsponsr.shell import Shell
 from offsponsr.sponsr import SponsrError
 from offsponsr.sync.events import EventBus
 from offsponsr.sync.service import InvalidAddressError, SyncError, SyncService, failure_code
@@ -24,6 +29,27 @@ WEB_DIR = Path(__file__).resolve().parent.parent / 'web'
 
 # Paths the backend owns; the SPA fallback must not answer them with index.html.
 BACKEND_PREFIXES = ('api', 'media')
+
+# What the window may load and run. The texts of posts are somebody else's HTML: whatever gets
+# past the UI's own cleaning still can't run a script or talk to anything but this server.
+CONTENT_SECURITY_POLICY = '; '.join(
+    (
+        "default-src 'self'",
+        "script-src 'self'",
+        # The UI kit writes its styles into the page as it goes.
+        "style-src 'self' 'unsafe-inline'",
+        # Pictures not downloaded yet are shown from where they are on the web.
+        "img-src 'self' data: https:",
+        "media-src 'self'",
+        # Third-party players (YouTube and the like); which ones is decided by the UI.
+        'frame-src https:',
+        "connect-src 'self'",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'none'",
+        "frame-ancestors 'none'",
+    )
+)
 
 
 class SessionRequest(BaseModel):
@@ -45,14 +71,18 @@ class Services:
     downloads: DownloadService
     events: EventBus
     pick_folder: FolderPicker
+    config: ConfigStore
+    shell: Shell = field(default_factory=Shell)
 
     @classmethod
-    def build(cls, libraries: LibraryManager, account: AccountService, pick_folder: FolderPicker) -> Self:
+    def build(
+        cls, libraries: LibraryManager, account: AccountService, pick_folder: FolderPicker, config: ConfigStore
+    ) -> Self:
         events = EventBus()
         downloads = DownloadService(libraries, account, events)
         # A project that has just been synced gets its pictures and other media downloaded.
         sync = SyncService(libraries, account, events, on_synced=downloads.enqueue_project)
-        return cls(libraries, account, sync, downloads, events, pick_folder)
+        return cls(libraries, account, sync, downloads, events, pick_folder, config)
 
     def is_busy(self) -> bool:
         """Whether something is writing into the library in the background."""
@@ -118,9 +148,16 @@ def create_app(launch_token: str, services: Services, web_dir: Path = WEB_DIR) -
     protected.include_router(library_router(services.libraries, services.pick_folder, services.is_busy))
     protected.include_router(account_router(services.account))
     protected.include_router(projects_router(services.libraries, services.sync, services.downloads, services.events))
+    protected.include_router(posts_router(services.libraries))
+    protected.include_router(shell_router(services.libraries, services.shell))
+    protected.include_router(settings_router(services.config))
+
+    media = APIRouter(prefix='/media', dependencies=[Depends(require_session)])
+    media.include_router(media_files_router(services.libraries))
 
     app.include_router(public)
     app.include_router(protected)
+    app.include_router(media)
     _serve_frontend(app, web_dir)
     return app
 
@@ -144,4 +181,4 @@ def _serve_frontend(app: FastAPI, web_dir: Path) -> None:
         if asset.is_file() and asset.is_relative_to(web_dir):
             return FileResponse(asset)
         # Any other path is a client-side route.
-        return FileResponse(index)
+        return FileResponse(index, headers={'Content-Security-Policy': CONTENT_SECURITY_POLICY})

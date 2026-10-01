@@ -63,11 +63,20 @@ def test_add_projects_and_see_them_downloaded(session_client, signed_in, sync_se
         'id': PID,
         'url': site_data.PROJECT_URL,
         'title': 'Вымышленный альманах',
+        'intent': 'на выдуманные тексты',
+        # Not downloaded yet, so the pictures are shown from where the site keeps them.
+        'logo': 'https://media.sponsr.ru/images/projects/42/4242/logo@2x.webp?5d41402abc4b2a76',
+        'cover': 'https://media.sponsr.ru/images/projects/42/4242/bg.webp?5d41402abc4b2a76',
         'added_via': 'subscription',
         'sync_enabled': True,
+        'media_mode_audio': 'auto',
+        'media_mode_video': 'manual',
+        'media_mode_attach': 'auto',
+        'video_quality': None,
         'posts': 6,
         'posts_without_text': 0,
         'posts_deleted': 0,
+        'posts_closed': 1,
     }
     assert session_client.get('/api/sync').json() == IDLE
     assert session_client.get('/api/subscriptions').json()[0]['in_library'] is True

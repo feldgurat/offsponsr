@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from offsponsr.config import CONFIG_DIR_ENV, AppConfig, ConfigStore, user_config_dir
 
 
@@ -38,3 +40,35 @@ def test_config_dir_default(monkeypatch):
     assert directory.name == 'offsponsr'
     assert directory.is_absolute()
     assert isinstance(directory, Path)
+
+
+def test_interface_settings_round_trip(config_store):
+    config_store.save(AppConfig(theme='dark', feed_view='list', hide_closed=True))
+
+    assert config_store.load() == AppConfig(theme='dark', feed_view='list', hide_closed=True)
+
+
+def test_unknown_and_bad_settings_fall_back_to_defaults(config_store):
+    config_store.path.parent.mkdir(parents=True)
+    config_store.path.write_text(
+        '{"library_path": "D:/x", "theme": "pink", "feed_view": 3, "hide_closed": "yes", "from_the_future": 1}',
+        encoding='utf-8',
+    )
+
+    assert config_store.load() == AppConfig(library_path='D:/x')
+
+
+def test_update_changes_only_what_is_named(config_store):
+    config_store.save(AppConfig(library_path='D:/x', theme='dark'))
+
+    updated = config_store.update(feed_view='tile')
+
+    assert updated == AppConfig(library_path='D:/x', theme='dark', feed_view='tile')
+    assert config_store.load() == updated
+
+
+def test_update_refuses_bad_values(config_store):
+    with pytest.raises(ValueError, match='theme'):
+        config_store.update(theme='pink')
+
+    assert config_store.load() == AppConfig()

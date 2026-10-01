@@ -10,13 +10,13 @@ from collections import deque
 from dataclasses import asdict, dataclass
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import requests
 from sqlalchemy import select, update
 
 from offsponsr.auth.errors import AuthError
-from offsponsr.auth.session import USER_AGENT
+from offsponsr.auth.session import SITE, USER_AGENT
 from offsponsr.library.models import Media, MediaKind, MediaMode, MediaState, Post, Project
 from offsponsr.library.paths import (
     ATTACHMENTS_DIR,
@@ -118,6 +118,14 @@ def file_url(project_id: int, post_id: int, file_id: str) -> str:
 def site_url(path: str) -> str:
     """A full address from what the site gives for logos and covers: a path on its media host."""
     return path if '://' in path else f'{MEDIA_HOST}{path}'
+
+
+def picture_url(address: str) -> str:
+    """The full address of a picture in a post's text; one without a host belongs to the site."""
+    url = urljoin(f'{SITE}/', address)
+    if urlsplit(url).scheme not in ('http', 'https'):
+        raise DownloadError('not_found', f'Not an address to download from: {address[:80]}')
+    return url
 
 
 def _suffix(url: str, default: str = '') -> str:
@@ -241,6 +249,22 @@ class DownloadService:
             db.commit()
         return self._enqueue(library, [Task(MEDIA, media_id)])
 
+    def enqueue_failed(self) -> int:
+        """Queue again every file whose download failed."""
+        library = self._libraries.current
+        if library is None:
+            return 0
+        with library.session() as db:
+            failed = select(Media.id).where(Media.state == MediaState.ERROR, Media.kind != MediaKind.EMBED)
+            media_ids = list(db.scalars(failed.order_by(Media.id)))
+            self._mark_queued(db, media_ids)
+            db.commit()
+        return self._enqueue(library, [Task(MEDIA, media_id) for media_id in media_ids])
+
+    def ffmpeg_path(self) -> Path | None:
+        """The ffmpeg the video downloads would use right now, if there is one."""
+        return self._find_ffmpeg()
+
     @staticmethod
     def _mark_queued(db: Session, media_ids: list[int]) -> None:
         # In portions: SQLite takes a limited number of values in one statement.
@@ -331,6 +355,8 @@ class DownloadService:
                 if not self._active and not self._queue:
                     # The last one out clears the stop flag, so the next batch can start.
                     self._stop.clear()
+            # Whoever shows this very file (a post's page, a feed) learns that its state has changed.
+            self._events.publish({'type': 'file', 'kind': task.kind, 'id': task.id})
             self._announce(force=True)
 
     def _progress(self, task: Task, title: str) -> Callable[[int, int | None], None]:
@@ -405,7 +431,7 @@ class DownloadService:
                 )
             else:
                 if kind == MediaKind.IMAGE:
-                    http, url = self._public, source_url
+                    http, url = self._public, picture_url(source_url)
                 else:
                     http, url = self._account.http(), file_address
                 self._fetch_to(http, url, part, dest, report)

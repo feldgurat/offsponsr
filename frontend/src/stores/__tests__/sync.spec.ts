@@ -230,3 +230,35 @@ describe('russianPlural', () => {
     ])
   })
 })
+
+describe('file events', () => {
+  it('tell the listeners, until they stop listening', () => {
+    setActivePinia(createPinia())
+    fakeBackend()
+    const sync = useSyncStore()
+    const heard: number[] = []
+    const stop = sync.onFile((event) => heard.push(event.id))
+
+    sync.handle({ type: 'file', kind: 'media', id: 7 })
+    sync.handle({ type: 'file', kind: 'post_cover', id: 8 })
+    stop()
+    sync.handle({ type: 'file', kind: 'media', id: 9 })
+
+    expect(heard).toEqual([7, 8])
+  })
+
+  it('reload the projects when a logo or a project cover arrives', async () => {
+    setActivePinia(createPinia())
+    const backend = fakeBackend()
+    const sync = useSyncStore()
+
+    sync.handle({ type: 'file', kind: 'post_cover', id: 1 })
+    sync.handle({ type: 'file', kind: 'media', id: 2 })
+    expect(backend.requests()).toEqual([])
+
+    sync.handle({ type: 'file', kind: 'project_logo', id: 4242 })
+    await Promise.resolve()
+
+    expect(backend.requests()).toEqual(['/api/projects'])
+  })
+})

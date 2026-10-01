@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { fakeBackend, IDLE, PROJECT, SIGNED_IN, SUBSCRIPTION } from '@/__tests__/backend'
+import { withPlugins } from '@/__tests__/mounting'
 import AddProjectsModal from '@/components/AddProjectsModal.vue'
 import SyncPanel from '@/components/SyncPanel.vue'
 import { i18n } from '@/i18n'
@@ -24,7 +25,7 @@ function buttonIn(root: ParentNode, label: string): HTMLButtonElement {
 }
 
 async function mountLibrary() {
-  const wrapper = mount(LibraryView, { ...plugins, attachTo: document.body })
+  const wrapper = mount(LibraryView, { ...withPlugins(), attachTo: document.body })
   await flushPromises()
   return wrapper
 }

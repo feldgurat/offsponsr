@@ -4,28 +4,20 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { ActiveDownload } from '@/api/types'
+import { useFormat } from '@/composables/format'
 import { useDownloadsStore } from '@/stores/downloads'
 
+/** `failures` off: the page lists the failed files itself, so the panel doesn't count them again. */
+const props = withDefaults(defineProps<{ failures?: boolean }>(), { failures: true })
+
 const { t } = useI18n()
+const { bytes: formatBytes } = useFormat()
 const downloads = useDownloadsStore()
 
 const finished = computed(() => downloads.state.done + downloads.state.failed)
 const percent = computed(() =>
   downloads.total ? Math.round((finished.value / downloads.total) * 100) : 0,
 )
-
-/** 1536 -> «1,5 КБ». */
-function formatBytes(bytes: number): string {
-  const units = ['b', 'kb', 'mb', 'gb'].map((unit) => t(`downloads.units.${unit}`))
-  let value = bytes
-  let unit = 0
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024
-    unit += 1
-  }
-  const digits = unit === 0 || value >= 100 ? 0 : 1
-  return `${value.toLocaleString('ru', { maximumFractionDigits: digits })} ${units[unit]}`
-}
 
 function size(download: ActiveDownload): string {
   if (download.bytes_total === null) {
@@ -39,7 +31,7 @@ function size(download: ActiveDownload): string {
 </script>
 
 <template>
-  <div v-if="downloads.busy || downloads.state.failed" class="downloads-panel">
+  <div v-if="downloads.busy || (props.failures && downloads.state.failed)" class="downloads-panel">
     <Card v-if="downloads.busy" size="small">
       <div class="downloads-panel__head">
         <strong>{{ t('downloads.title') }}</strong>
@@ -60,7 +52,7 @@ function size(download: ActiveDownload): string {
     </Card>
 
     <Alert
-      v-if="downloads.state.failed"
+      v-if="props.failures && downloads.state.failed"
       type="warning"
       show-icon
       :message="t('downloads.failed', { n: downloads.state.failed })"

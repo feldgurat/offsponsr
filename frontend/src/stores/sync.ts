@@ -6,16 +6,21 @@ import type { ServerEvent, SyncInfo } from '@/api/types'
 
 import { useAccountStore } from './account'
 import { useDownloadsStore } from './downloads'
+import { useMediaStore } from './media'
 import { useProjectsStore } from './projects'
 
 const IDLE: SyncInfo = { running: null, queue: [], failures: [], cancelling: false }
 
 export type ProjectSyncStatus = 'running' | 'queued' | 'idle'
 
+export type FileEvent = Extract<ServerEvent, { type: 'file' }>
+type FileListener = (event: FileEvent) => void
+
 /** The background sync: what is being downloaded, what waits, what failed. */
 export const useSyncStore = defineStore('sync', () => {
   const state = ref<SyncInfo>(IDLE)
   let source: EventSource | null = null
+  const fileListeners = new Set<FileListener>()
 
   const busy = computed(() => state.value.running !== null || state.value.queue.length > 0)
 
@@ -42,6 +47,17 @@ export const useSyncStore = defineStore('sync', () => {
       apply(event.state)
     } else if (event.type === 'downloads') {
       useDownloadsStore().state = event.state
+    } else if (event.type === 'file') {
+      if (event.kind === 'media') {
+        // From here on the file's row tells its state; the user's click is no longer pending.
+        useMediaStore().forget(event.id)
+      } else if (event.kind !== 'post_cover') {
+        // A project's logo or cover: the list of projects carries their addresses.
+        void useProjectsStore()
+          .load()
+          .catch(() => undefined)
+      }
+      fileListeners.forEach((listener) => listener(event))
     } else if (event.type === 'projects') {
       void useProjectsStore()
         .load()
@@ -65,6 +81,15 @@ export const useSyncStore = defineStore('sync', () => {
     source = null
   }
 
+  /**
+   * Hear about every download that is through: a page showing that file reloads it.
+   * Returns what to call to stop listening.
+   */
+  function onFile(listener: FileListener): () => void {
+    fileListeners.add(listener)
+    return () => fileListeners.delete(listener)
+  }
+
   /** Update the given projects, or every project when called without ids. */
   async function start(projectIds?: number[]): Promise<void> {
     apply(await api.post<SyncInfo>('/sync', { project_ids: projectIds ?? null }))
@@ -74,5 +99,5 @@ export const useSyncStore = defineStore('sync', () => {
     apply(await api.post<SyncInfo>('/sync/cancel'))
   }
 
-  return { state, busy, statusOf, connect, disconnect, handle, start, cancel }
+  return { state, busy, statusOf, connect, disconnect, handle, onFile, start, cancel }
 })

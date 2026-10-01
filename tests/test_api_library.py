@@ -73,7 +73,7 @@ def test_status_reports_why_the_last_library_did_not_open(config_store, folder_p
 
     libraries = LibraryManager(config_store)
     libraries.open_last()
-    services = Services.build(libraries, AccountService(libraries, login_window), folder_picker)
+    services = Services.build(libraries, AccountService(libraries, login_window), folder_picker, config_store)
     app = create_app(LAUNCH_TOKEN, services, web_dir)
     client = TestClient(app, base_url='http://127.0.0.1')
     client.post('/api/session', json={'token': LAUNCH_TOKEN})

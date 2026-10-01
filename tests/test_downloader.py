@@ -391,9 +391,16 @@ def test_progress_is_announced(downloads, synced, media_host, events):
     wait_until_idle(downloads)
 
     states = []
+    finished = []
     while (event := listener.get(0.05)) is not None:
-        assert event['type'] == 'downloads'
-        states.append(event['state'])
+        if event['type'] == 'file':
+            finished.append((event['kind'], event['id']))
+        else:
+            assert event['type'] == 'downloads'
+            states.append(event['state'])
+    # Every file that is through says so, for whoever is showing it.
+    assert len(finished) == 6
+    assert {kind for kind, _ in finished} == {'media', 'post_cover', 'project_logo', 'project_cover'}
     assert states[0]['queued'] + len(states[0]['active']) == 6
     assert states[-1] == {'active': [], 'queued': 0, 'done': 6, 'failed': 0, 'cancelling': False}
     titles = {download['title'] for state in states for download in state['active']}

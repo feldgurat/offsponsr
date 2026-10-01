@@ -376,3 +376,26 @@ class FakeLoginWindow:
             if accepts(cookies):
                 return cookies
         return None
+
+
+class FakeShell:
+    """Stands in for the user's system: remembers what it was asked to open instead of opening it."""
+
+    def __init__(self):
+        self.calls = []
+        # Set to make every request fail, as a system without a browser or a file manager would.
+        self.error = None
+
+    def _record(self, action, target):
+        if self.error is not None:
+            raise self.error
+        self.calls.append((action, target))
+
+    def open_url(self, url):
+        self._record('open_url', url)
+
+    def open_file(self, path):
+        self._record('open_file', path)
+
+    def reveal(self, path):
+        self._record('reveal', path)

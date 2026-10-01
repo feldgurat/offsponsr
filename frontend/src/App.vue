@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SettingOutlined } from '@ant-design/icons-vue'
 import {
   ConfigProvider,
   Layout,
@@ -15,6 +16,8 @@ import { RouterLink, RouterView } from 'vue-router'
 
 import AccountMenu from '@/components/AccountMenu.vue'
 import AccountNotice from '@/components/AccountNotice.vue'
+import ActivityIndicator from '@/components/ActivityIndicator.vue'
+import ThemeVars from '@/components/ThemeVars.vue'
 import { useAppStore } from '@/stores/app'
 import { useLibraryStore } from '@/stores/library'
 import { useThemeStore } from '@/stores/theme'
@@ -30,9 +33,19 @@ onMounted(() => app.load())
 
 <template>
   <ConfigProvider :locale="ruRU" :theme="theme.antConfig">
+    <ThemeVars />
     <Layout class="app">
       <LayoutHeader v-if="library.current" class="app__header">
         <RouterLink class="app__brand" :to="{ name: 'library' }">{{ t('app.title') }}</RouterLink>
+        <nav class="app__nav">
+          <RouterLink class="app__link" :to="{ name: 'library' }">
+            {{ t('library.title') }}
+          </RouterLink>
+          <ActivityIndicator />
+          <RouterLink class="app__link" :to="{ name: 'settings' }">
+            <SettingOutlined /> {{ t('settings.title') }}
+          </RouterLink>
+        </nav>
         <AccountMenu />
       </LayoutHeader>
 
@@ -65,14 +78,40 @@ onMounted(() => app.load())
 }
 
 .app__header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
+  gap: 24px;
+  padding: 0 24px;
 }
 
 .app__brand {
+  flex-shrink: 0;
   color: #fff;
   font-size: 18px;
   font-weight: 500;
+}
+
+.app__nav {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+  /* In a narrow window the links give way before the account does. */
+  overflow: hidden;
+}
+
+.app__link {
+  color: rgba(255, 255, 255, 0.65);
+  white-space: nowrap;
+}
+
+.app__link:hover,
+.app__link.router-link-exact-active {
+  color: #fff;
 }
 
 .app__content {

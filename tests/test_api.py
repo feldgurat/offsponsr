@@ -60,9 +60,18 @@ def test_frontend_serves_index_for_client_routes(client):
     assert '<title>index</title>' in response.text
 
 
-def test_unknown_backend_paths_are_not_index(client):
-    assert client.get('/api/nope').status_code == 404
-    assert client.get('/media/nope.mp4').status_code == 404
+def test_unknown_backend_paths_are_not_index(session_client):
+    assert session_client.get('/api/nope').status_code == 404
+    assert session_client.get('/media/nope/at/all.mp4').status_code == 404
+
+
+def test_the_page_comes_with_a_content_security_policy(client):
+    policy = client.get('/').headers['content-security-policy']
+
+    assert "script-src 'self'" in policy
+    assert "object-src 'none'" in policy
+    # Client-side routes are the same page.
+    assert client.get('/project/42').headers['content-security-policy'] == policy
 
 
 def test_frontend_does_not_leave_web_dir(client, web_dir):

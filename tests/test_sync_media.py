@@ -1,6 +1,6 @@
 from offsponsr.library.models import MediaKind
 from offsponsr.sponsr.models import PostFile
-from offsponsr.sync.media import MediaRef, media_in_files, media_in_html
+from offsponsr.sync.media import MediaRef, mark_media, media_in_files, media_in_html
 
 from . import site_data
 
@@ -75,3 +75,57 @@ def test_files():
         MediaRef(MediaKind.ATTACH, '6002', '/u/book.pdf', title='book.pdf', size=20),
         MediaRef(MediaKind.AUDIO, '6003', '/u/b.ogg', title='b.ogg'),
     ]
+
+
+def test_the_sites_own_player_is_a_kinescope_video():
+    """Older posts frame the site's player page; Kinescope has the same video under its UUID."""
+    legacy = f'<iframe src="/post/video/?video_id={site_data.VIDEO_ID}?poster_id={site_data.POSTER_ID}"></iframe>'
+
+    [ref] = media_in_html(f'<div class="post-video">{legacy}</div>')
+
+    assert ref == MediaRef(MediaKind.VIDEO, site_data.VIDEO_ID, f'https://kinescope.io/{site_data.VIDEO_ID}')
+
+
+def test_the_same_video_framed_both_ways_is_one_video():
+    legacy = f'<iframe src="https://sponsr.ru/post/video/?video_id={site_data.VIDEO_ID}"></iframe>'
+
+    refs = media_in_html(f'{site_data.VIDEO}{legacy}')
+
+    assert [(ref.kind, ref.source_id) for ref in refs] == [(MediaKind.VIDEO, site_data.VIDEO_ID)]
+
+
+def test_a_player_page_elsewhere_is_an_embed():
+    [ref] = media_in_html(f'<iframe src="https://example.com/post/video/?video_id={site_data.VIDEO_ID}"></iframe>')
+
+    assert ref.kind is MediaKind.EMBED
+
+
+def test_media_is_labelled_in_the_text():
+    html = f'<p>Текст &amp; ещё</p>\n<p>{site_data.IMAGE}</p>\r\n<div>{site_data.VIDEO}</div>\n{YOUTUBE}'
+    picture, video, embed = media_in_html(html)
+    ids = {(picture.kind, picture.source_id): 7, (video.kind, video.source_id): 8, (embed.kind, embed.source_id): 9}
+
+    marked = mark_media(html, ids)
+
+    assert marked == html.replace('<img ', '<img data-media="7" ').replace(
+        '<iframe src="https://kinescope', '<iframe data-media="8" src="https://kinescope'
+    ).replace('<iframe src="https://www.youtube', '<iframe data-media="9" src="https://www.youtube')
+    # Nothing else about the text changes.
+    assert marked.replace(' data-media="7"', '').replace(' data-media="8"', '').replace(' data-media="9"', '') == html
+
+
+def test_every_copy_of_a_picture_gets_the_label():
+    html = f'<p>{site_data.IMAGE}</p><p>{site_data.IMAGE}</p>'
+    [picture] = media_in_html(html)
+
+    assert mark_media(html, {(picture.kind, picture.source_id): 3}).count('data-media="3"') == 2
+
+
+def test_unknown_media_is_left_unlabelled():
+    html = f'<P>Текст</P><IMG SRC="https://media.sponsr.ru/a.webp">{YOUTUBE}'
+
+    assert mark_media(html, {}) == html
+    assert mark_media(html, {(MediaKind.IMAGE, 'media.sponsr.ru/a.webp'): 5}) == html.replace(
+        '<IMG ', '<IMG data-media="5" '
+    )
+    assert mark_media('', {}) == ''

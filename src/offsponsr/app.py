@@ -51,9 +51,10 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = parse_args(argv)
     setup_logging(console=args.dev)
 
-    libraries = LibraryManager(ConfigStore())
+    config = ConfigStore()
+    libraries = LibraryManager(config)
     libraries.open_last()
-    services = Services.build(libraries, AccountService(libraries, run_login_window), pick_folder)
+    services = Services.build(libraries, AccountService(libraries, run_login_window), pick_folder, config)
 
     launch_token = secrets.token_urlsafe(32)
     server = BackgroundServer(create_app(launch_token, services), port=DEV_API_PORT if args.dev else 0)

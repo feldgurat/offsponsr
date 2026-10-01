@@ -20,6 +20,7 @@ from offsponsr.library.paths import (
     unique_name,
 )
 from offsponsr.media import ffmpeg, files
+from offsponsr.media.downloader import picture_url
 from offsponsr.media.ffmpeg import FfmpegError, find_ffmpeg, mux
 from offsponsr.media.files import DownloadCancelled, DownloadError, fetch
 
@@ -327,3 +328,18 @@ def test_mux_failure_reports_what_ffmpeg_said_and_leaves_no_file(tmp_path, monke
         mux(Path('ffmpeg'), [tmp_path / 'v'], dest)
 
     assert not dest.exists()
+
+
+def test_a_picture_without_a_host_belongs_to_the_site():
+    assert picture_url('https://media.sponsr.ru/a.webp?1') == 'https://media.sponsr.ru/a.webp?1'
+    assert picture_url('/images/a.webp') == 'https://sponsr.ru/images/a.webp'
+    assert picture_url('//media.sponsr.ru/a.webp') == 'https://media.sponsr.ru/a.webp'
+    assert picture_url('a.webp') == 'https://sponsr.ru/a.webp'
+
+
+@pytest.mark.parametrize('address', ['data:image/png;base64,AAAA', 'javascript:alert(1)', 'file:///C:/a.png'])
+def test_what_is_not_a_web_address_is_not_downloaded(address):
+    with pytest.raises(DownloadError) as failure:
+        picture_url(address)
+
+    assert failure.value.code == 'not_found'

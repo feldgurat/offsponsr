@@ -6,6 +6,7 @@ import type { AppInfo } from '@/api/types'
 
 import { useAccountStore } from './account'
 import { useLibraryStore } from './library'
+import { useSettingsStore } from './settings'
 import { useSyncStore } from './sync'
 
 export type AppStatus = 'loading' | 'ready' | 'error'
@@ -19,6 +20,7 @@ export const useAppStore = defineStore('app', () => {
     status.value = 'loading'
     try {
       info.value = await api.get<AppInfo>('/app')
+      await useSettingsStore().load()
       await useLibraryStore().load()
       await useAccountStore().load()
       // From here on the backend pushes its news: sync progress and changes to the projects.

@@ -2,11 +2,11 @@
 import { Button, Empty, Tag, TypographyParagraph, TypographyTitle } from 'ant-design-vue'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { RouterLink } from 'vue-router'
 
 import type { ProjectInfo } from '@/api/types'
 import AddProjectsModal from '@/components/AddProjectsModal.vue'
-import DownloadsPanel from '@/components/DownloadsPanel.vue'
-import SyncPanel from '@/components/SyncPanel.vue'
+import { useFormat } from '@/composables/format'
 import { useAccountStore } from '@/stores/account'
 import { useProjectsStore } from '@/stores/projects'
 import { useSyncStore } from '@/stores/sync'
@@ -16,8 +16,7 @@ const account = useAccountStore()
 const projects = useProjectsStore()
 const sync = useSyncStore()
 const adding = ref(false)
-
-const dateTime = new Intl.DateTimeFormat('ru', { dateStyle: 'medium', timeStyle: 'short' })
+const { dateTime } = useFormat()
 
 onMounted(() => {
   void projects.load().catch(() => undefined)
@@ -25,7 +24,7 @@ onMounted(() => {
 
 function syncedAt(project: ProjectInfo): string {
   return project.last_synced_at
-    ? t('library.syncedAt', { date: dateTime.format(new Date(project.last_synced_at)) })
+    ? t('library.syncedAt', { date: dateTime(project.last_synced_at) })
     : t('library.neverSynced')
 }
 </script>
@@ -47,21 +46,27 @@ function syncedAt(project: ProjectInfo): string {
       </template>
     </div>
 
-    <SyncPanel />
-    <DownloadsPanel />
-
     <ul v-if="projects.list.length" class="library__projects">
       <li v-for="project in projects.list" :key="project.id" class="library__project">
-        <div class="library__project-text">
-          <div class="library__project-title">{{ project.title }}</div>
-          <div class="library__project-meta">
-            <span>{{ t('library.posts', { n: project.posts }, project.posts) }}</span>
-            <span>{{ syncedAt(project) }}</span>
-            <span v-if="project.posts_without_text">
-              {{ t('library.withoutText', { n: project.posts_without_text }) }}
+        <RouterLink
+          class="library__project-link"
+          :to="{ name: 'project', params: { id: project.id } }"
+        >
+          <span class="library__logo">
+            <img v-if="project.logo" :src="project.logo" alt="" loading="lazy" />
+          </span>
+          <span class="library__project-text">
+            <span class="library__project-title">{{ project.title }}</span>
+            <span class="library__project-meta">
+              <span>{{ t('library.posts', { n: project.posts }, project.posts) }}</span>
+              <span>{{ syncedAt(project) }}</span>
+              <span v-if="project.posts_without_text">
+                {{ t('library.withoutText', { n: project.posts_without_text }) }}
+              </span>
+              <span v-if="!project.sync_enabled">{{ t('library.syncDisabled') }}</span>
             </span>
-          </div>
-        </div>
+          </span>
+        </RouterLink>
         <Tag v-if="sync.statusOf(project.id) === 'running'" color="processing">
           {{ t('library.running') }}
         </Tag>
@@ -120,14 +125,46 @@ function syncedAt(project: ProjectInfo): string {
   border-bottom: 1px solid rgba(128, 128, 128, 0.25);
 }
 
-.library__project-text {
+.library__project-link {
+  display: flex;
   flex: 1;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  color: inherit;
+}
+
+.library__project-link:hover .library__project-title {
+  color: var(--c-primary, #fa541c);
+}
+
+.library__logo {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--c-fill, rgba(128, 128, 128, 0.12));
+}
+
+.library__logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.library__project-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   min-width: 0;
 }
 
 .library__project-title {
   font-size: 16px;
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 .library__project-meta {

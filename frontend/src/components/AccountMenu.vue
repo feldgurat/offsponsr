@@ -16,7 +16,7 @@ const cookieModalOpen = ref(false)
   <div class="account">
     <template v-if="account.info.signed_in">
       <span class="account__email">{{ account.info.email }}</span>
-      <Button ghost :disabled="account.busy" @click="account.logout()">
+      <Button ghost class="account__out" :disabled="account.busy" @click="account.logout()">
         {{ t('account.signOut') }}
       </Button>
     </template>
@@ -37,6 +37,7 @@ const cookieModalOpen = ref(false)
 <style scoped>
 .account {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 12px;
   margin-left: auto;
@@ -49,5 +50,11 @@ const cookieModalOpen = ref(false)
 
 .account__cookie {
   color: rgba(255, 255, 255, 0.65);
+}
+
+/* The header is dark in both themes; the dark theme's own ghost button would vanish on it. */
+.account__out:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.85);
 }
 </style>

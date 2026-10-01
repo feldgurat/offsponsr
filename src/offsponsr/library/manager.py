@@ -74,9 +74,7 @@ class LibraryManager:
             self._current = library
             self._last_failure = None
 
-            config = self._config_store.load()
-            config.library_path = str(library.root)
-            self._config_store.save(config)
+            self._config_store.update(library_path=str(library.root))
             return library
 
 
