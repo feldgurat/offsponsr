@@ -112,6 +112,10 @@ class Project(Base):
     title: Mapped[str] = mapped_column(String(1024))
     intent: Mapped[str | None] = mapped_column(Text)
     description_html: Mapped[str | None] = mapped_column(Text)
+    # Where the site keeps the logo and the cover (paths on its media host), and the copies
+    # in the library once they are downloaded.
+    logo_url: Mapped[str | None] = mapped_column(String(2048))
+    cover_url: Mapped[str | None] = mapped_column(String(2048))
     logo_path: Mapped[str | None] = mapped_column(String(1024))
     cover_path: Mapped[str | None] = mapped_column(String(1024))
     added_via: Mapped[AddedVia] = mapped_column(_values(AddedVia))
@@ -167,6 +171,8 @@ class Post(Base):
     duration_video: Mapped[int | None]
     content_type: Mapped[str | None] = mapped_column(String(64))
     pinned: Mapped[bool] = mapped_column(default=False)
+    # The post's cover picture: where the site keeps it, and the copy in the library.
+    cover_url: Mapped[str | None] = mapped_column(String(2048))
     cover_path: Mapped[str | None] = mapped_column(String(1024))
     raw_json: Mapped[dict[str, Any] | None]
 

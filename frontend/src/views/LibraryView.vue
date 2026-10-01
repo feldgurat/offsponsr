@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { ProjectInfo } from '@/api/types'
 import AddProjectsModal from '@/components/AddProjectsModal.vue'
+import DownloadsPanel from '@/components/DownloadsPanel.vue'
 import SyncPanel from '@/components/SyncPanel.vue'
 import { useAccountStore } from '@/stores/account'
 import { useProjectsStore } from '@/stores/projects'
@@ -47,6 +48,7 @@ function syncedAt(project: ProjectInfo): string {
     </div>
 
     <SyncPanel />
+    <DownloadsPanel />
 
     <ul v-if="projects.list.length" class="library__projects">
       <li v-for="project in projects.list" :key="project.id" class="library__project">

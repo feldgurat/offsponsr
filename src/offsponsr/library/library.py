@@ -17,15 +17,15 @@ from offsponsr.library.errors import (
     NotALibraryError,
 )
 from offsponsr.library.lock import LibraryLock
+from offsponsr.library.paths import PROJECTS_DIR, long_path
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from pathlib import Path, PurePath
 
     from sqlalchemy import Engine
 
 MANIFEST_NAME = 'library.json'
 DB_NAME = 'offsponsr.db'
-PROJECTS_DIR = 'projects'
 TMP_DIR = '.tmp'
 
 # The version of the folder layout (not of the database schema, which migrations track).
@@ -130,6 +130,10 @@ class Library:
     def tmp_dir(self) -> Path:
         """Where unfinished downloads live."""
         return self.root / TMP_DIR
+
+    def file(self, relative: str | PurePath) -> Path:
+        """Where on disk a path kept in the database is; safe to use however deep the library sits."""
+        return long_path(self.root / relative)
 
     def session(self) -> Session:
         return Session(self._engine)

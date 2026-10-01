@@ -10,6 +10,7 @@ from sqlalchemy import and_, case, func, not_, select
 from offsponsr.auth import NoLibraryError
 from offsponsr.library import LibraryManager
 from offsponsr.library.models import Post, PostStatus, Project
+from offsponsr.media.downloader import DownloadService, DownloadState
 from offsponsr.sync.events import Event, EventBus
 from offsponsr.sync.service import SyncService, SyncState
 
@@ -75,8 +76,31 @@ class SyncInfo(BaseModel):
     cancelling: bool
 
 
+class ActiveDownloadInfo(BaseModel):
+    key: str
+    title: str
+    bytes_done: int
+    bytes_total: int | None
+
+
+class DownloadsInfo(BaseModel):
+    active: list[ActiveDownloadInfo]
+    queued: int
+    done: int
+    failed: int
+    cancelling: bool
+
+
+class QueuedDownloads(BaseModel):
+    queued: int
+
+
 def _sync_info(state: SyncState) -> SyncInfo:
     return SyncInfo.model_validate(state.to_json())
+
+
+def _downloads_info(state: DownloadState) -> DownloadsInfo:
+    return DownloadsInfo.model_validate(state.to_json())
 
 
 def _sse(event: Event) -> str:
@@ -84,7 +108,11 @@ def _sse(event: Event) -> str:
 
 
 def projects_router(
-    libraries: LibraryManager, sync: SyncService, events: EventBus, keepalive: float = KEEPALIVE
+    libraries: LibraryManager,
+    sync: SyncService,
+    downloads: DownloadService,
+    events: EventBus,
+    keepalive: float = KEEPALIVE,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -147,6 +175,24 @@ def projects_router(
     def cancel_sync() -> SyncInfo:
         return _sync_info(sync.cancel())
 
+    @router.get('/downloads')
+    def downloads_state() -> DownloadsInfo:
+        return _downloads_info(downloads.state())
+
+    @router.post('/downloads/cancel')
+    def cancel_downloads() -> DownloadsInfo:
+        return _downloads_info(downloads.cancel())
+
+    @router.post('/projects/{project_id}/download')
+    def download_project_media(project_id: int) -> QueuedDownloads:
+        """Queue what the project is missing on disk; the same thing a sync does when it ends."""
+        return QueuedDownloads(queued=downloads.enqueue_project(project_id))
+
+    @router.post('/media/{media_id}/download')
+    def download_media(media_id: int) -> QueuedDownloads:
+        """Queue one file the user asked for, e.g. a video that isn't downloaded by itself."""
+        return QueuedDownloads(queued=downloads.enqueue_media(media_id))
+
     @router.get('/events')
     def event_stream() -> StreamingResponse:
         """Server-sent events: the sync's state whenever it changes, and a nudge when the projects do."""
@@ -156,6 +202,7 @@ def projects_router(
             try:
                 # Where things stand right now, so a listener never starts out of date.
                 yield _sse({'type': 'sync', 'state': sync.state().to_json()})
+                yield _sse({'type': 'downloads', 'state': downloads.state().to_json()})
                 while True:
                     try:
                         event = listener.get(keepalive)

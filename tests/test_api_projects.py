@@ -144,8 +144,39 @@ def test_event_stream(session_client, library, events):
     received = [json.loads(line.removeprefix('data: ')) for line in response.text.splitlines() if line]
     assert received == [
         {'type': 'sync', 'state': IDLE},
+        {'type': 'downloads', 'state': {'active': [], 'queued': 0, 'done': 0, 'failed': 0, 'cancelling': False}},
         {'type': 'projects'},
         {'type': 'sync', 'state': {'running': {'title': 'Проект'}}},
     ]
     # Cyrillic goes out as it is, not as escapes.
     assert 'Проект' in response.text
+
+
+NO_DOWNLOADS = {'active': [], 'queued': 0, 'done': 0, 'failed': 0, 'cancelling': False}
+
+
+def test_downloads_api_requires_session(client):
+    assert client.get('/api/downloads').status_code == 401
+    assert client.post('/api/downloads/cancel').status_code == 401
+    assert client.post(f'/api/projects/{PID}/download').status_code == 401
+    assert client.post('/api/media/1/download').status_code == 401
+
+
+def test_downloads_api(session_client, signed_in, sync_service, downloads, sponsr):
+    session_client.post('/api/projects', json={'subscription_ids': [PID]})
+    wait_until_idle(sync_service)
+    sponsr.serve_file('https://media.sponsr.ru/', b'any file', needs_session=False)
+
+    assert session_client.get('/api/downloads').json() == NO_DOWNLOADS
+
+    # A logo, a cover, two post covers, a picture and an audio file.
+    assert session_client.post(f'/api/projects/{PID}/download').json() == {'queued': 6}
+    deadline = time.monotonic() + 10
+    while downloads.is_busy():
+        assert time.monotonic() < deadline
+        time.sleep(0.01)
+
+    assert session_client.get('/api/downloads').json() == {**NO_DOWNLOADS, 'done': 6}
+    assert session_client.post(f'/api/projects/{PID}/download').json() == {'queued': 0}
+    assert session_client.post('/api/media/999999/download').json() == {'queued': 0}
+    assert session_client.post('/api/downloads/cancel').json() == {**NO_DOWNLOADS, 'done': 6}

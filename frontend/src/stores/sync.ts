@@ -5,6 +5,7 @@ import { api } from '@/api/client'
 import type { ServerEvent, SyncInfo } from '@/api/types'
 
 import { useAccountStore } from './account'
+import { useDownloadsStore } from './downloads'
 import { useProjectsStore } from './projects'
 
 const IDLE: SyncInfo = { running: null, queue: [], failures: [], cancelling: false }
@@ -39,6 +40,8 @@ export const useSyncStore = defineStore('sync', () => {
   function handle(event: ServerEvent): void {
     if (event.type === 'sync') {
       apply(event.state)
+    } else if (event.type === 'downloads') {
+      useDownloadsStore().state = event.state
     } else if (event.type === 'projects') {
       void useProjectsStore()
         .load()

@@ -14,6 +14,7 @@ from offsponsr.api.projects import projects_router
 from offsponsr.api.session import SESSION_COOKIE, SessionGate
 from offsponsr.auth import AccountService, AuthError, InvalidCookieError, SiteUnavailableError
 from offsponsr.library import LibraryError, LibraryManager
+from offsponsr.media.downloader import DownloadService
 from offsponsr.sponsr import SponsrError
 from offsponsr.sync.events import EventBus
 from offsponsr.sync.service import InvalidAddressError, SyncError, SyncService, failure_code
@@ -41,17 +42,26 @@ class Services:
     libraries: LibraryManager
     account: AccountService
     sync: SyncService
+    downloads: DownloadService
     events: EventBus
     pick_folder: FolderPicker
 
     @classmethod
     def build(cls, libraries: LibraryManager, account: AccountService, pick_folder: FolderPicker) -> Self:
         events = EventBus()
-        return cls(libraries, account, SyncService(libraries, account, events), events, pick_folder)
+        downloads = DownloadService(libraries, account, events)
+        # A project that has just been synced gets its pictures and other media downloaded.
+        sync = SyncService(libraries, account, events, on_synced=downloads.enqueue_project)
+        return cls(libraries, account, sync, downloads, events, pick_folder)
+
+    def is_busy(self) -> bool:
+        """Whether something is writing into the library in the background."""
+        return self.sync.is_busy() or self.downloads.is_busy()
 
     def shutdown(self) -> None:
         """Stop the background work and end the event streams, so the server and the library can close."""
         self.sync.shutdown()
+        self.downloads.shutdown()
         self.events.close()
 
 
@@ -105,9 +115,9 @@ def create_app(launch_token: str, services: Services, web_dir: Path = WEB_DIR) -
     def app_info() -> AppInfo:
         return AppInfo(name='offsponsr', version=__version__)
 
-    protected.include_router(library_router(services.libraries, services.pick_folder, services.sync.is_busy))
+    protected.include_router(library_router(services.libraries, services.pick_folder, services.is_busy))
     protected.include_router(account_router(services.account))
-    protected.include_router(projects_router(services.libraries, services.sync, services.events))
+    protected.include_router(projects_router(services.libraries, services.sync, services.downloads, services.events))
 
     app.include_router(public)
     app.include_router(protected)

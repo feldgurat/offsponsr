@@ -144,9 +144,12 @@ class SyncService:
         account: AccountService,
         events: EventBus,
         make_client: Callable[[AccountService], SponsrClient] = SponsrClient,
+        on_synced: Callable[[int], object] | None = None,
     ) -> None:
         self._libraries = libraries
         self._events = events
+        # Told the id of every project whose sync went through; the downloads take it from there.
+        self._on_synced = on_synced
         # One client for everything, so the pause between requests holds across projects.
         self._client = make_client(account)
         self._lock = threading.Lock()
@@ -335,6 +338,8 @@ class SyncService:
                 batch.subscriptions = {subscription.id: subscription for subscription in self._client.subscriptions()}
             sync = ProjectSync(library, self._client, on_progress=on_progress, should_stop=self._stop.is_set)
             sync.run(project_id, batch.subscriptions.get(project_id))
+            if self._on_synced:
+                self._on_synced(project_id)
         except SyncCancelled:
             return True
         except (AuthError, SponsrError) as error:

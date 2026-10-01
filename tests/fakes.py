@@ -57,6 +57,9 @@ class _OriginalResponse:
     def isclosed(self):
         return True
 
+    def close(self):
+        pass
+
 
 class FakeSponsr:
     """Answers the app's HTTP requests instead of the network.
@@ -138,6 +141,39 @@ class FakeSponsr:
         self.routes.pop(more_posts_url(project_id=feed.project_id), None)
         self.patterns.append((f'{API}/content/posts/?project_id={feed.project_id}&', posts))
         self.patterns.append((f'{SITE}/project/{feed.project_id}/more-posts/?', more_posts))
+
+    def serve_file(self, url, content, *, needs_session=False, content_type='application/octet-stream'):
+        """Serve bytes at `url` (any query), honouring Range requests as the real media hosts do.
+
+        Returns a list that collects the Range header of every request, None for a whole-file one.
+        """
+        ranges = []
+
+        def route(request):
+            if needs_session:
+                cookies = request.headers.get('Cookie', '')
+                if not any(f'SESS={value}' in cookies for value in self.sessions):
+                    return 403, '<html>403</html>', []
+            asked = request.headers.get('Range')
+            ranges.append(asked)
+            total = len(content)
+            if asked is None:
+                return 200, content, [], {'Content-Type': content_type, 'Content-Length': str(total)}
+            first, _, last = asked.removeprefix('bytes=').partition('-')
+            first = int(first)
+            if first >= total:
+                return 416, b'', [], {'Content-Range': f'bytes */{total}'}
+            last = min(int(last), total - 1) if last else total - 1
+            body = content[first : last + 1]
+            headers = {
+                'Content-Type': content_type,
+                'Content-Length': str(len(body)),
+                'Content-Range': f'bytes {first}-{last}/{total}',
+            }
+            return 206, body, [], headers
+
+        self.patterns.append((url, route))
+        return ranges
 
     def revoke_tokens(self):
         """Stop accepting the access tokens handed out so far."""

@@ -1,6 +1,9 @@
 BSD 3-Clause License
 
 Copyright (c) 2026, feldgurat
+Copyright (c) 2023-2026, Igor `idle sign` Starikov (the Kinescope download code,
+file name handling and test fixtures taken from sponsrdump,
+https://github.com/idlesign/sponsrdump)
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:

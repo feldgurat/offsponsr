@@ -66,6 +66,18 @@ export default {
       unknown: 'Не получилось. Подробности в журнале приложения.',
     },
   },
+  downloads: {
+    title: 'Скачивается медиа',
+    // one | few | many
+    progress: '{done} из {total} файла | {done} из {total} файлов | {done} из {total} файлов',
+    size: '{done} из {total}',
+    cancel: 'Отменить',
+    cancelling: 'Останавливается…',
+    failed: 'Не удалось скачать файлов: {n}',
+    failedHint:
+      'Приложение попробует ещё раз при следующем обновлении проекта. Причины записаны в журнале.',
+    units: { b: 'Б', kb: 'КБ', mb: 'МБ', gb: 'ГБ' },
+  },
   sync: {
     running: 'Обновляется: {title}',
     preparing: 'Подготовка…',

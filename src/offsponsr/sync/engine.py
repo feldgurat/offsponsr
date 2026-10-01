@@ -138,6 +138,13 @@ class ProjectSync:
         project.intent = card.intent
         project.description_html = card.description_html
         project.raw_json = card.raw
+        # The larger of the two logo sizes, if the site has it.
+        logo_url = (card.logo.x2 or card.logo.x1) if card.logo else None
+        # A new address means a new picture: forget the old copy so it is downloaded again.
+        if project.cover_url != card.cover:
+            project.cover_url, project.cover_path = card.cover, None
+        if project.logo_url != logo_url:
+            project.logo_url, project.logo_path = logo_url, None
         if subscription is not None:
             project.subscription_level_id = subscription.level.id if subscription.level else None
             project.last_paid = subscription.last_paid
@@ -234,6 +241,8 @@ class ProjectSync:
         post.duration_video = site_post.duration_video
         post.content_type = site_post.content_type
         post.pinned = site_post.pinned
+        if post.cover_url != site_post.image:
+            post.cover_url, post.cover_path = site_post.image, None
         post.raw_json = site_post.raw
         if post.status == PostStatus.DELETED_ON_SITE:
             # It is on the list again.

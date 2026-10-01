@@ -7,6 +7,8 @@ from offsponsr.api import Services, create_app
 from offsponsr.auth import AccountService
 from offsponsr.config import ConfigStore
 from offsponsr.library import LibraryManager
+from offsponsr.media import files
+from offsponsr.media.downloader import DownloadService
 from offsponsr.sponsr import SponsrClient
 from offsponsr.sync.events import EventBus
 from offsponsr.sync.service import SyncService
@@ -103,8 +105,25 @@ def sync_service(libraries, account, events):
 
 
 @pytest.fixture
-def services(libraries, account, sync_service, events, folder_picker):
-    services = Services(libraries, account, sync_service, events, folder_picker)
+def ffmpeg_path(tmp_path):
+    """Where the downloads look for ffmpeg in tests: a file that exists; nothing ever runs it."""
+    path = tmp_path / 'ffmpeg-for-tests'
+    path.write_bytes(b'')
+    return path
+
+
+@pytest.fixture
+def downloads(libraries, account, events, ffmpeg_path, monkeypatch):
+    # A dropped connection is retried at once: the site is a fake and the tests are in a hurry.
+    monkeypatch.setattr(files, 'RETRY_DELAY', 0)
+    service = DownloadService(libraries, account, events, ffmpeg=lambda: ffmpeg_path)
+    yield service
+    service.shutdown()
+
+
+@pytest.fixture
+def services(libraries, account, sync_service, downloads, events, folder_picker):
+    services = Services(libraries, account, sync_service, downloads, events, folder_picker)
     yield services
     # Before the `libraries` fixture closes the library the sync may still be writing to.
     services.shutdown()

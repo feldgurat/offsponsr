@@ -77,5 +77,25 @@ export interface SyncInfo {
   cancelling: boolean
 }
 
+export interface ActiveDownload {
+  key: string
+  title: string
+  bytes_done: number
+  /** null while the size is not known. */
+  bytes_total: number | null
+}
+
+export interface DownloadsInfo {
+  active: ActiveDownload[]
+  queued: number
+  /** Since the queue last started from empty. */
+  done: number
+  failed: number
+  cancelling: boolean
+}
+
 /** What the backend pushes over /api/events. */
-export type ServerEvent = { type: 'sync'; state: SyncInfo } | { type: 'projects' }
+export type ServerEvent =
+  | { type: 'sync'; state: SyncInfo }
+  | { type: 'downloads'; state: DownloadsInfo }
+  | { type: 'projects' }
