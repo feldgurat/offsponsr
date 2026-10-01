@@ -1,0 +1,56 @@
+[project]
+name = "offsponsr"
+dynamic = ["version"]
+description = "Desktop app that keeps a local copy of your sponsr.ru subscriptions"
+authors = [
+    { name = "Vladislav Skryabin" }
+]
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.142.2",
+    "pywebview>=6.2.1",
+    "uvicorn>=0.54.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/feldgurat/offsponsr"
+
+[project.gui-scripts]
+offsponsr = "offsponsr.app:main"
+
+[dependency-groups]
+dev = [
+    {include-group = "linters"},
+    {include-group = "tests"},
+]
+linters = [
+    "ruff>=0.16.9",
+]
+tests = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/offsponsr/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/offsponsr"]
+# The built frontend is git-ignored, so hatch has to be told to ship it.
+artifacts = ["src/offsponsr/web"]
+
+[tool.hatch.build.targets.sdist]
+packages = ["src/"]
+artifacts = ["src/offsponsr/web"]
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+]
