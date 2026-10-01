@@ -158,13 +158,13 @@ class SponsrSession:
         """The account's email as of the latest token, or as remembered from an earlier run."""
         return self._email
 
-    def token(self) -> AccessToken:
-        """A token good for at least the next few minutes.
+    def token(self, *, force: bool = False) -> AccessToken:
+        """A token good for at least the next few minutes; `force` gets a new one regardless.
 
         Raises SessionExpiredError when sponsr.ru no longer accepts the cookies.
         """
         with self._lock:
-            if self._token is None or not self._token.is_fresh(datetime.now(UTC)):
+            if force or self._token is None or not self._token.is_fresh(datetime.now(UTC)):
                 if not self.cookies:
                     # No session cookie, nothing to ask the site about.
                     raise SessionExpiredError

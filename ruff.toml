@@ -43,4 +43,6 @@ ignore = []
 
 
 [lint.extend-per-file-ignores]
-"tests/*" = []
+"tests/*" = [
+    "RUF001",  # Russian test data is full of letters that look Latin
+]

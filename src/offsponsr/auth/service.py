@@ -25,6 +25,8 @@ from offsponsr.library.models import Account
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    import requests
+
     from offsponsr.library import Library, LibraryManager
 
     # Shows sponsr.ru's sign-in page and returns the cookies once the callback accepts them,
@@ -76,17 +78,21 @@ class AccountService:
                 return AccountState(signed_in=False, expired=self._expired)
             return AccountState(signed_in=True, email=session.email)
 
-    def token(self) -> AccessToken:
-        """An access token for the API. Signs the account out if sponsr.ru rejects the session."""
+    def http(self) -> requests.Session:
+        """The HTTP session that carries the account's cookies."""
+        return self._signed_in_session(self._library()).http
+
+    def token(self, *, force: bool = False) -> AccessToken:
+        """An access token for the API. Signs the account out if sponsr.ru rejects the session.
+
+        `force` asks for a new token even if the current one hasn't run out.
+        """
         library = self._library()
-        with self._lock:
-            session = self._current_session(library)
-        if session is None:
-            raise NotSignedInError
+        session = self._signed_in_session(library)
 
         # Outside the lock: this may wait on the network, and state() must stay quick meanwhile.
         try:
-            return session.token()
+            return session.token(force=force)
         except SessionExpiredError:
             log.info('The stored session has expired')
             with self._lock:
@@ -144,6 +150,13 @@ class AccountService:
         if library is None:
             raise NoLibraryError
         return library
+
+    def _signed_in_session(self, library: Library) -> SponsrSession:
+        with self._lock:
+            session = self._current_session(library)
+        if session is None:
+            raise NotSignedInError
+        return session
 
     def _current_session(self, library: Library) -> SponsrSession | None:
         if self._loaded_for != library.id:

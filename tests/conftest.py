@@ -76,6 +76,14 @@ def account(libraries, login_window):
 
 
 @pytest.fixture
+def signed_in(account, library, sponsr):
+    """The account service of an open library, signed in to the fake sponsr.ru."""
+    sponsr.sign_in('good')
+    account.login_with_cookie_header('SESS=good; user_id=123456')
+    return account
+
+
+@pytest.fixture
 def make_app(web_dir, libraries, account, folder_picker):
     def make(*, web_dir=web_dir):
         return create_app(LAUNCH_TOKEN, libraries, account, folder_picker, web_dir)
