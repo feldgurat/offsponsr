@@ -9,8 +9,11 @@ import webview
 
 from offsponsr import __version__
 from offsponsr.api import BackgroundServer, create_app
+from offsponsr.auth import AccountService
+from offsponsr.auth.login_window import run_login_window
 from offsponsr.config import ConfigStore
 from offsponsr.library import LibraryManager
+from offsponsr.logs import setup_logging
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -46,13 +49,15 @@ def pick_folder() -> Path | None:
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = parse_args(argv)
+    setup_logging(console=args.dev)
 
     libraries = LibraryManager(ConfigStore())
     libraries.open_last()
+    account = AccountService(libraries, run_login_window)
 
     launch_token = secrets.token_urlsafe(32)
     server = BackgroundServer(
-        create_app(launch_token, libraries, pick_folder),
+        create_app(launch_token, libraries, account, pick_folder),
         port=DEV_API_PORT if args.dev else 0,
     )
     server.start()

@@ -3,6 +3,7 @@ import shutil
 from fastapi.testclient import TestClient
 
 from offsponsr.api import create_app
+from offsponsr.auth import AccountService
 from offsponsr.library import Library, LibraryManager
 
 from .conftest import LAUNCH_TOKEN
@@ -64,7 +65,7 @@ def test_open_a_folder_that_is_not_a_library(session_client, tmp_path):
     assert response.json()['code'] == 'not_a_library'
 
 
-def test_status_reports_why_the_last_library_did_not_open(config_store, folder_picker, web_dir, tmp_path):
+def test_status_reports_why_the_last_library_did_not_open(config_store, folder_picker, login_window, web_dir, tmp_path):
     first_run = LibraryManager(config_store)
     root = first_run.create(tmp_path / 'library').root
     first_run.close()
@@ -72,7 +73,8 @@ def test_status_reports_why_the_last_library_did_not_open(config_store, folder_p
 
     libraries = LibraryManager(config_store)
     libraries.open_last()
-    client = TestClient(create_app(LAUNCH_TOKEN, libraries, folder_picker, web_dir), base_url='http://127.0.0.1')
+    app = create_app(LAUNCH_TOKEN, libraries, AccountService(libraries, login_window), folder_picker, web_dir)
+    client = TestClient(app, base_url='http://127.0.0.1')
     client.post('/api/session', json={'token': LAUNCH_TOKEN})
 
     assert client.get('/api/library').json() == {

@@ -13,6 +13,8 @@ import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, RouterView } from 'vue-router'
 
+import AccountMenu from '@/components/AccountMenu.vue'
+import AccountNotice from '@/components/AccountNotice.vue'
 import { useAppStore } from '@/stores/app'
 import { useLibraryStore } from '@/stores/library'
 import { useThemeStore } from '@/stores/theme'
@@ -31,6 +33,7 @@ onMounted(() => app.load())
     <Layout class="app">
       <LayoutHeader v-if="library.current" class="app__header">
         <RouterLink class="app__brand" :to="{ name: 'library' }">{{ t('app.title') }}</RouterLink>
+        <AccountMenu />
       </LayoutHeader>
 
       <LayoutContent class="app__content">
@@ -43,7 +46,10 @@ onMounted(() => app.load())
         <Spin v-else-if="app.status === 'loading'" class="app__spin" :tip="t('app.loading')" />
         <!-- Nothing in the app works without a library, so there is nowhere else to go yet. -->
         <WelcomeView v-else-if="!library.current" />
-        <RouterView v-else />
+        <template v-else>
+          <AccountNotice />
+          <RouterView />
+        </template>
       </LayoutContent>
 
       <LayoutFooter v-if="app.info" class="app__footer">

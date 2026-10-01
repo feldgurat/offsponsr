@@ -1,21 +1,34 @@
+import keyring
 import pytest
 from fastapi.testclient import TestClient
+from requests.adapters import HTTPAdapter
 
 from offsponsr.api import create_app
+from offsponsr.auth import AccountService
 from offsponsr.config import ConfigStore
 from offsponsr.library import LibraryManager
+
+from .fakes import FakeFolderPicker, FakeLoginWindow, FakeSponsr, MemoryKeyring
 
 LAUNCH_TOKEN = 'launch-token'
 
 
-class FakeFolderPicker:
-    """Stands in for the system folder dialog: returns whatever the test put in `choice`."""
+@pytest.fixture(autouse=True)
+def sponsr(monkeypatch):
+    """Every test talks to a fake sponsr.ru; none can reach the network."""
+    fake = FakeSponsr()
+    monkeypatch.setattr(HTTPAdapter, 'send', lambda adapter, request, **kwargs: fake.send(adapter, request, **kwargs))
+    return fake
 
-    def __init__(self):
-        self.choice = None
 
-    def __call__(self):
-        return self.choice
+@pytest.fixture(autouse=True)
+def system_keyring():
+    """Every test gets an empty in-memory keyring instead of the real one of this machine."""
+    real = keyring.get_keyring()
+    fake = MemoryKeyring()
+    keyring.set_keyring(fake)
+    yield fake
+    keyring.set_keyring(real)
 
 
 @pytest.fixture
@@ -42,14 +55,30 @@ def libraries(config_store):
 
 
 @pytest.fixture
+def library(libraries, tmp_path):
+    """An open, empty library."""
+    return libraries.create(tmp_path / 'library')
+
+
+@pytest.fixture
 def folder_picker():
     return FakeFolderPicker()
 
 
 @pytest.fixture
-def make_app(web_dir, libraries, folder_picker):
+def login_window():
+    return FakeLoginWindow()
+
+
+@pytest.fixture
+def account(libraries, login_window):
+    return AccountService(libraries, login_window)
+
+
+@pytest.fixture
+def make_app(web_dir, libraries, account, folder_picker):
     def make(*, web_dir=web_dir):
-        return create_app(LAUNCH_TOKEN, libraries, folder_picker, web_dir)
+        return create_app(LAUNCH_TOKEN, libraries, account, folder_picker, web_dir)
 
     return make
 

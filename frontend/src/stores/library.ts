@@ -4,6 +4,8 @@ import { ref } from 'vue'
 import { api, ApiError } from '@/api/client'
 import type { FolderChoice, LibraryFailure, LibraryInfo, LibraryStatus } from '@/api/types'
 
+import { useAccountStore } from './account'
+
 export const useLibraryStore = defineStore('library', () => {
   const current = ref<LibraryInfo | null>(null)
   /** Why the library from the previous run didn't open, until the user picks another. */
@@ -29,7 +31,12 @@ export const useLibraryStore = defineStore('library', () => {
         return
       }
       path = choice.path
-      current.value = await api.post<LibraryInfo>(`/library/${action}`, { path })
+      const opened = await api.post<LibraryInfo>(`/library/${action}`, { path })
+      // Each library has its own account; find out who is signed in before showing it.
+      await useAccountStore()
+        .load()
+        .catch(() => undefined)
+      current.value = opened
       lastFailure.value = null
     } catch (error) {
       const code = error instanceof ApiError ? error.code : null

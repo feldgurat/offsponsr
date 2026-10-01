@@ -24,3 +24,10 @@ export interface FolderChoice {
   /** null if the user cancelled the dialog. */
   path: string | null
 }
+
+export interface AccountInfo {
+  signed_in: boolean
+  email: string | null
+  /** The stored session stopped working; the user has to sign in again. */
+  expired: boolean
+}

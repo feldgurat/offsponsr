@@ -34,7 +34,7 @@ describe('WelcomeView', () => {
     await button(wrapper, 'Создать библиотеку').trigger('click')
     await flushPromises()
 
-    expect(backend.requests()).toEqual(['/api/dialogs/folder', '/api/library/create'])
+    expect(backend.requests()).toContain('/api/library/create')
     expect(useLibraryStore().current).toEqual(LIBRARY)
   })
 
@@ -48,7 +48,8 @@ describe('WelcomeView', () => {
     await button(wrapper, 'Открыть существующую').trigger('click')
     await flushPromises()
 
-    expect(backend.requests()).toEqual(['/api/dialogs/folder', '/api/library/open'])
+    expect(backend.requests()).toContain('/api/library/open')
+    expect(useLibraryStore().current).toEqual(LIBRARY)
   })
 
   it('explains why the chosen folder was refused', async () => {

@@ -1,7 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { fakeBackend, LIBRARY } from '@/__tests__/backend'
+import { fakeBackend, LIBRARY, SIGNED_IN } from '@/__tests__/backend'
+import { useAccountStore } from '@/stores/account'
 import { useLibraryStore } from '@/stores/library'
 
 const chosen = (path: string | null) => () => Response.json({ path })
@@ -34,7 +35,11 @@ describe('library store', () => {
 
     await library.create()
 
-    expect(backend.requests()).toEqual(['/api/dialogs/folder', '/api/library/create'])
+    expect(backend.requests()).toEqual([
+      '/api/dialogs/folder',
+      '/api/library/create',
+      '/api/account',
+    ])
     expect(backend.bodyOf('/api/library/create')).toEqual({ path: LIBRARY.path })
     expect(library.current).toEqual(LIBRARY)
     expect(library.lastFailure).toBeNull()
@@ -51,8 +56,34 @@ describe('library store', () => {
 
     await library.open()
 
-    expect(backend.requests()).toEqual(['/api/dialogs/folder', '/api/library/open'])
+    expect(backend.requests()).toEqual(['/api/dialogs/folder', '/api/library/open', '/api/account'])
     expect(library.current).toEqual(LIBRARY)
+  })
+
+  it('finds out who is signed in to the library it opened', async () => {
+    fakeBackend({
+      '/api/dialogs/folder': chosen(LIBRARY.path),
+      '/api/library/open': () => Response.json(LIBRARY),
+      '/api/account': () => Response.json(SIGNED_IN),
+    })
+
+    await useLibraryStore().open()
+
+    expect(useAccountStore().info).toEqual(SIGNED_IN)
+  })
+
+  it('opens the library even if the account cannot be read', async () => {
+    fakeBackend({
+      '/api/dialogs/folder': chosen(LIBRARY.path),
+      '/api/library/open': () => Response.json(LIBRARY),
+      '/api/account': () => new Response(null, { status: 500 }),
+    })
+    const library = useLibraryStore()
+
+    await library.open()
+
+    expect(library.current).toEqual(LIBRARY)
+    expect(library.actionFailure).toBeNull()
   })
 
   it('does nothing when the folder dialog is cancelled', async () => {

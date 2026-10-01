@@ -7,8 +7,10 @@ from pydantic import BaseModel
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from offsponsr import __version__
+from offsponsr.api.account import account_router
 from offsponsr.api.library import FolderPicker, library_router
 from offsponsr.api.session import SESSION_COOKIE, SessionGate
+from offsponsr.auth import AccountService, AuthError, InvalidCookieError, SiteUnavailableError
 from offsponsr.library import LibraryError, LibraryManager
 
 # `npm run build` in frontend/ puts the bundle here.
@@ -30,6 +32,7 @@ class AppInfo(BaseModel):
 def create_app(
     launch_token: str,
     libraries: LibraryManager,
+    account: AccountService,
     pick_folder: FolderPicker,
     web_dir: Path = WEB_DIR,
 ) -> FastAPI:
@@ -43,6 +46,16 @@ def create_app(
     def library_error(_request: Request, error: LibraryError) -> JSONResponse:
         # The UI turns `code` into a message in the user's language.
         return JSONResponse({'code': error.code, 'path': str(error.path)}, status_code=status.HTTP_409_CONFLICT)
+
+    @app.exception_handler(AuthError)
+    def auth_error(_request: Request, error: AuthError) -> JSONResponse:
+        if isinstance(error, SiteUnavailableError):
+            status_code = status.HTTP_502_BAD_GATEWAY
+        elif isinstance(error, InvalidCookieError):
+            status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+        else:
+            status_code = status.HTTP_409_CONFLICT
+        return JSONResponse({'code': error.code}, status_code=status_code)
 
     def require_session(session_id: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None) -> None:
         if not gate.is_valid(session_id):
@@ -63,6 +76,7 @@ def create_app(
         return AppInfo(name='offsponsr', version=__version__)
 
     protected.include_router(library_router(libraries, pick_folder))
+    protected.include_router(account_router(account))
 
     app.include_router(public)
     app.include_router(protected)
