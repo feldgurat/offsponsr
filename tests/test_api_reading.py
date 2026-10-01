@@ -461,10 +461,3 @@ def test_failed_downloads_are_listed_and_retried(reader, library, downloads, spo
     assert reader.get('/api/downloads/failed').json() == {'total': 0, 'items': []}
     assert media_of(library, MediaKind.AUDIO).state is MediaState.DONE
     assert reader.post('/api/downloads/retry').json() == {'queued': 0}
-
-
-def test_ffmpeg_status(reader, ffmpeg_path, downloads, monkeypatch):
-    assert reader.get('/api/ffmpeg').json() == {'found': True, 'path': str(ffmpeg_path)}
-
-    monkeypatch.setattr(downloads, '_find_ffmpeg', lambda: None)
-    assert reader.get('/api/ffmpeg').json() == {'found': False, 'path': None}

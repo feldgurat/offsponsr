@@ -109,8 +109,12 @@ export type ServerEvent =
   | { type: 'sync'; state: SyncInfo }
   | { type: 'downloads'; state: DownloadsInfo }
   | { type: 'projects' }
-  /** A download is through (done, failed or cancelled): `id` is of a media row, a post or a project. */
+  /**
+   * A download is through (done, failed or cancelled) or a failed one is queued again:
+   * `id` is of a media row, a post or a project.
+   */
   | { type: 'file'; kind: 'media' | 'post_cover' | 'project_logo' | 'project_cover'; id: number }
+  | { type: 'ffmpeg'; state: FfmpegInfo }
 
 export type MediaMode = 'auto' | 'manual'
 
@@ -262,4 +266,13 @@ export interface FailedDownloads {
 export interface FfmpegInfo {
   found: boolean
   path: string | null
+  version: string | null
+  /** The path is the one the user pointed at, not one the app found. */
+  chosen: boolean
+  /** The app can install ffmpeg by itself: the computer has winget. */
+  can_install: boolean
+  installing: boolean
+  /** The code of why the last installation failed. */
+  error: string | null
+  platform: 'windows' | 'macos' | 'linux'
 }

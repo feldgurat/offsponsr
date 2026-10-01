@@ -24,6 +24,9 @@ from offsponsr.media.downloader import picture_url
 from offsponsr.media.ffmpeg import FfmpegError, find_ffmpeg, mux
 from offsponsr.media.files import DownloadCancelled, DownloadError, fetch
 
+# The real thing: the tests' fixtures put a stand-in in its place, so that no test reads the registry.
+INSTALLED_PATH = ffmpeg.installed_path
+
 URL = 'https://media.sponsr.ru/some/file.bin'
 CONTENT = bytes(range(256)) * 40  # 10240 bytes, every position tellable from its neighbours
 
@@ -291,6 +294,61 @@ def test_find_ffmpeg_falls_back_to_the_apps_own(tmp_path, monkeypatch):
     own.write_bytes(b'')
 
     assert find_ffmpeg() == own
+
+
+def test_find_ffmpeg_looks_where_a_program_started_now_would(tmp_path, monkeypatch):
+    """An ffmpeg installed while the app runs is on the registry's PATH, not on the app's own."""
+    installed = tmp_path / 'installed' / ffmpeg.EXECUTABLE
+    installed.parent.mkdir()
+    installed.write_bytes(b'')
+    installed.chmod(0o755)
+    monkeypatch.setenv(CONFIG_DIR_ENV, str(tmp_path / 'config'))
+    monkeypatch.setenv('PATH', str(tmp_path / 'nothing-here'))
+
+    assert find_ffmpeg() is None
+
+    monkeypatch.setattr(ffmpeg, 'installed_path', lambda: str(installed.parent))
+
+    assert find_ffmpeg() == installed
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='The registry is a Windows thing')
+def test_installed_path_is_put_together_from_the_registry(monkeypatch):
+    import winreg  # noqa: PLC0415
+
+    values = {
+        winreg.HKEY_LOCAL_MACHINE: (r'C:\Windows;%OFFSPONSR_TEST_ROOT%\bin', winreg.REG_EXPAND_SZ),
+        winreg.HKEY_CURRENT_USER: (r'C:\Users\reader\ffmpeg\bin', winreg.REG_SZ),
+    }
+
+    class Key:
+        def __init__(self, root):
+            self.root = root
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *failure):
+            return False
+
+    def query(key, name):
+        assert name == 'Path'
+        if key.root not in values:
+            raise FileNotFoundError
+        return values[key.root]
+
+    monkeypatch.setenv('OFFSPONSR_TEST_ROOT', r'D:\tools')
+    monkeypatch.setattr(ffmpeg.winreg, 'OpenKey', lambda root, key: Key(root))
+    monkeypatch.setattr(ffmpeg.winreg, 'QueryValueEx', query)
+
+    assert INSTALLED_PATH() == r'C:\Windows;D:\tools\bin;C:\Users\reader\ffmpeg\bin'
+
+    # A user without a PATH of their own: the system's alone.
+    del values[winreg.HKEY_CURRENT_USER]
+    assert INSTALLED_PATH() == r'C:\Windows;D:\tools\bin'
+
+    values.clear()
+    assert INSTALLED_PATH() is None
 
 
 def test_mux_runs_ffmpeg_without_a_shell(tmp_path, monkeypatch):

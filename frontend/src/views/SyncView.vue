@@ -5,12 +5,14 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import { api } from '@/api/client'
-import type { FailedDownloads, FfmpegInfo, SyncRun } from '@/api/types'
+import type { FailedDownloads, SyncRun } from '@/api/types'
 import DownloadsPanel from '@/components/DownloadsPanel.vue'
+import FfmpegOffer from '@/components/FfmpegOffer.vue'
 import SyncPanel from '@/components/SyncPanel.vue'
 import { useFormat } from '@/composables/format'
 import { useAccountStore } from '@/stores/account'
 import { useDownloadsStore } from '@/stores/downloads'
+import { useFfmpegStore } from '@/stores/ffmpeg'
 import { useProjectsStore } from '@/stores/projects'
 import { useSyncStore } from '@/stores/sync'
 
@@ -20,10 +22,10 @@ const account = useAccountStore()
 const projects = useProjectsStore()
 const sync = useSyncStore()
 const downloads = useDownloadsStore()
+const ffmpeg = useFfmpegStore()
 
 const history = ref<SyncRun[]>([])
 const failed = ref<FailedDownloads>({ total: 0, items: [] })
-const ffmpeg = ref<FfmpegInfo | null>(null)
 const retrying = ref(false)
 
 async function load(): Promise<void> {
@@ -37,12 +39,7 @@ async function load(): Promise<void> {
 
 onMounted(() => {
   void load().catch(() => undefined)
-  void api
-    .get<FfmpegInfo>('/ffmpeg')
-    .then((info) => {
-      ffmpeg.value = info
-    })
-    .catch(() => undefined)
+  void ffmpeg.load().catch(() => undefined)
   if (!projects.loaded) {
     void projects.load().catch(() => undefined)
   }
@@ -115,12 +112,14 @@ const outcomeColor = { ok: 'success', cancelled: 'default', failed: 'error', unf
     </div>
 
     <Alert
-      v-if="ffmpeg && !ffmpeg.found"
+      v-if="ffmpeg.info && !ffmpeg.info.found"
       type="warning"
       show-icon
-      :message="t('syncPage.noFfmpeg')"
-      :description="t('syncPage.noFfmpegHint')"
-    />
+      :message="t('ffmpeg.missing')"
+      :description="t('ffmpeg.missingHint')"
+    >
+      <template #action><FfmpegOffer /></template>
+    </Alert>
 
     <SyncPanel />
     <Card v-if="queue.length" size="small" :title="t('syncPage.queue')">

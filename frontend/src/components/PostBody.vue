@@ -12,8 +12,11 @@ import EmbedFrame from './EmbedFrame.vue'
 import MediaAudio from './MediaAudio.vue'
 import MediaVideo from './MediaVideo.vue'
 
+/** Marks the links that came with the post, as opposed to the app's own controls put into the text. */
+const POST_LINK = 'data-post-link'
+
 /** Attributes the renderer sets itself or has no use for. */
-const DROPPED = new Set(['class', 'target', 'rel', 'data-media'])
+const DROPPED = new Set(['class', 'target', 'rel', 'data-media', POST_LINK])
 
 /**
  * The text of a post. The site's HTML is cleaned (see post/sanitize.ts) and then rebuilt
@@ -105,6 +108,9 @@ export default defineComponent({
       if (classes.length) {
         attributes.class = classes
       }
+      if (tag === 'a') {
+        attributes[POST_LINK] = ''
+      }
       return h(tag, attributes, children(element))
     }
 
@@ -119,7 +125,8 @@ export default defineComponent({
       }
       // Whatever the link is, the window stays in the app.
       event.preventDefault()
-      const href = anchor.getAttribute('href')
+      // A link of the app's own (in a control put into the text) has done its work by now.
+      const href = anchor.hasAttribute(POST_LINK) ? anchor.getAttribute('href') : null
       if (href) {
         void links.follow(href)
       }

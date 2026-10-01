@@ -36,10 +36,16 @@ class AppConfig:
     feed_view: str = 'stream'
     # Leave the posts the account can't read out of the feeds.
     hide_closed: bool = False
+    # The ffmpeg the user pointed at; without it the app looks for one itself.
+    ffmpeg_path: str | None = None
+
+
+# Settings that hold a path, or nothing.
+_PATHS = ('library_path', 'ffmpeg_path')
 
 
 def _valid(name: str, value: Any) -> bool:
-    if name == 'library_path':
+    if name in _PATHS:
         return isinstance(value, str)
     if name == 'theme':
         return value in THEMES
@@ -80,7 +86,7 @@ class ConfigStore:
         with self._lock:
             config = self.load()
             for name, value in changes.items():
-                if not _valid(name, value) and not (name == 'library_path' and value is None):
+                if not _valid(name, value) and not (name in _PATHS and value is None):
                     raise ValueError(f'Bad value for {name}')
                 setattr(config, name, value)
             self.save(config)

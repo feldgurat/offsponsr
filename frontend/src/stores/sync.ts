@@ -6,6 +6,7 @@ import type { ServerEvent, SyncInfo } from '@/api/types'
 
 import { useAccountStore } from './account'
 import { useDownloadsStore } from './downloads'
+import { useFfmpegStore } from './ffmpeg'
 import { useMediaStore } from './media'
 import { useProjectsStore } from './projects'
 
@@ -58,6 +59,8 @@ export const useSyncStore = defineStore('sync', () => {
           .catch(() => undefined)
       }
       fileListeners.forEach((listener) => listener(event))
+    } else if (event.type === 'ffmpeg') {
+      useFfmpegStore().info = event.state
     } else if (event.type === 'projects') {
       void useProjectsStore()
         .load()

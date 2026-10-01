@@ -9,6 +9,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from offsponsr import __version__
 from offsponsr.api.account import account_router
+from offsponsr.api.ffmpeg import ProgramPicker, ffmpeg_router
 from offsponsr.api.files import media_files_router, shell_router
 from offsponsr.api.library import FolderPicker, library_router
 from offsponsr.api.posts import posts_router
@@ -18,7 +19,8 @@ from offsponsr.api.settings import settings_router
 from offsponsr.auth import AccountService, AuthError, InvalidCookieError, SiteUnavailableError
 from offsponsr.config import ConfigStore
 from offsponsr.library import LibraryError, LibraryManager
-from offsponsr.media.downloader import DownloadService
+from offsponsr.media.downloader import NO_FFMPEG, DownloadService
+from offsponsr.media.ffmpeg_setup import FfmpegSetup, FfmpegSetupError
 from offsponsr.shell import Shell
 from offsponsr.sponsr import SponsrError
 from offsponsr.sync.events import EventBus
@@ -72,17 +74,27 @@ class Services:
     events: EventBus
     pick_folder: FolderPicker
     config: ConfigStore
+    ffmpeg: FfmpegSetup
+    pick_program: ProgramPicker
     shell: Shell = field(default_factory=Shell)
 
     @classmethod
     def build(
-        cls, libraries: LibraryManager, account: AccountService, pick_folder: FolderPicker, config: ConfigStore
+        cls,
+        libraries: LibraryManager,
+        account: AccountService,
+        pick_folder: FolderPicker,
+        pick_program: ProgramPicker,
+        config: ConfigStore,
     ) -> Self:
         events = EventBus()
-        downloads = DownloadService(libraries, account, events)
+        ffmpeg = FfmpegSetup(config, events)
+        downloads = DownloadService(libraries, account, events, ffmpeg=ffmpeg.path)
+        # Once there is an ffmpeg, the videos that failed for the lack of one are tried again.
+        ffmpeg.when_ready(lambda: downloads.enqueue_failed(NO_FFMPEG))
         # A project that has just been synced gets its pictures and other media downloaded.
         sync = SyncService(libraries, account, events, on_synced=downloads.enqueue_project)
-        return cls(libraries, account, sync, downloads, events, pick_folder, config)
+        return cls(libraries, account, sync, downloads, events, pick_folder, config, ffmpeg, pick_program)
 
     def is_busy(self) -> bool:
         """Whether something is writing into the library in the background."""
@@ -90,6 +102,7 @@ class Services:
 
     def shutdown(self) -> None:
         """Stop the background work and end the event streams, so the server and the library can close."""
+        self.ffmpeg.shutdown()
         self.sync.shutdown()
         self.downloads.shutdown()
         self.events.close()
@@ -123,6 +136,12 @@ def create_app(launch_token: str, services: Services, web_dir: Path = WEB_DIR) -
         status_code = status.HTTP_422_UNPROCESSABLE_CONTENT if invalid else status.HTTP_409_CONFLICT
         return JSONResponse({'code': error.code}, status_code=status_code)
 
+    @app.exception_handler(FfmpegSetupError)
+    def ffmpeg_error(_request: Request, error: FfmpegSetupError) -> JSONResponse:
+        missing = error.code == 'no_winget'
+        status_code = status.HTTP_409_CONFLICT if missing else status.HTTP_422_UNPROCESSABLE_CONTENT
+        return JSONResponse({'code': error.code}, status_code=status_code)
+
     @app.exception_handler(SponsrError)
     def site_error(_request: Request, error: SponsrError) -> JSONResponse:
         return JSONResponse({'code': failure_code(error)}, status_code=status.HTTP_502_BAD_GATEWAY)
@@ -151,6 +170,7 @@ def create_app(launch_token: str, services: Services, web_dir: Path = WEB_DIR) -
     protected.include_router(posts_router(services.libraries))
     protected.include_router(shell_router(services.libraries, services.shell))
     protected.include_router(settings_router(services.config))
+    protected.include_router(ffmpeg_router(services.ffmpeg, services.pick_program))
 
     media = APIRouter(prefix='/media', dependencies=[Depends(require_session)])
     media.include_router(media_files_router(services.libraries))

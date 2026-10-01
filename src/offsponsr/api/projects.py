@@ -108,11 +108,6 @@ class FailedDownloads(BaseModel):
     items: list[FailedDownload]
 
 
-class FfmpegInfo(BaseModel):
-    found: bool
-    path: str | None
-
-
 class SubscriptionInfo(BaseModel):
     id: int
     url: str
@@ -400,12 +395,6 @@ def projects_router(
     @router.post('/downloads/retry')
     def retry_downloads() -> QueuedDownloads:
         return QueuedDownloads(queued=downloads.enqueue_failed())
-
-    @router.get('/ffmpeg')
-    def ffmpeg() -> FfmpegInfo:
-        """Whether there is an ffmpeg to join videos with."""
-        path = downloads.ffmpeg_path()
-        return FfmpegInfo(found=path is not None, path=str(path) if path else None)
 
     @router.post('/projects/{project_id}/download')
     def download_project_media(project_id: int) -> QueuedDownloads:

@@ -190,9 +190,28 @@ export default {
       failed: 'Ошибка',
       unfinished: 'Прервано',
     },
-    noFfmpeg: 'Не найден ffmpeg',
-    noFfmpegHint:
-      'Видео скачивается частями, и собрать их в один файл может только ffmpeg. Установите его и перезапустите offsponsr. Тексты, картинки, аудио и вложения скачиваются и без него.',
+  },
+  ffmpeg: {
+    missing: 'Не найден ffmpeg',
+    missingHint:
+      'Видео скачивается частями, и собрать их в один файл может только ffmpeg. Тексты, картинки, аудио и вложения скачиваются и без него.',
+    install: 'Установить ffmpeg',
+    installing: 'ffmpeg устанавливается…',
+    howTo: 'Как установить ffmpeg',
+    confirm: {
+      title: 'Установить ffmpeg?',
+      text: 'offsponsr запустит команду «winget install Gyan.FFmpeg.Essentials». winget скачает сборку ffmpeg от Gyan (около 110 МБ, лицензия GPL-3.0), проверит её и установит для вашей учётной записи Windows. Это займёт несколько минут. Видео, которые не скачались без ffmpeg, после этого скачаются сами.',
+      ok: 'Установить',
+      cancel: 'Не сейчас',
+    },
+    // Keyed by the error codes of the backend (offsponsr/media/ffmpeg_setup.py).
+    errors: {
+      install_failed: 'winget не смог установить ffmpeg. Подробности в журнале приложения.',
+      install_timeout: 'winget не закончил установку за полчаса, и она остановлена.',
+      no_winget: 'На этом компьютере нет winget.',
+      not_ffmpeg: 'Этот файл не похож на ffmpeg.',
+      unknown: 'Не получилось. Подробности в журнале приложения.',
+    },
   },
   settings: {
     title: 'Настройки',
@@ -210,7 +229,25 @@ export default {
       hint: 'Библиотека — папка с базой данных и скачанными файлами. Её можно перенести целиком и открыть с нового места.',
       busy: 'Дождитесь конца обновления и загрузок или отмените их.',
     },
-    ffmpeg: { title: 'ffmpeg', found: 'Найден, видео будет собираться им:' },
+    ffmpeg: {
+      title: 'ffmpeg',
+      found: 'Найден, видео будет собираться им:',
+      chosen: 'Указан вами, видео будет собираться им:',
+      version: 'Версия {version}',
+      canInstall: 'offsponsr может установить ffmpeg сам, через winget.',
+      choose: 'Указать файл ffmpeg…',
+      forget: 'Забыть указанный файл',
+      check: 'Проверить снова',
+      builds: 'Открыть gyan.dev',
+      hints: {
+        windows:
+          'На этом компьютере нет winget, поэтому offsponsr не может установить ffmpeg сам. Скачайте сборку с gyan.dev, распакуйте её и укажите файл ffmpeg.exe из папки bin.',
+        macos:
+          'Установите ffmpeg, например командой «brew install ffmpeg», и нажмите «Проверить снова». Если ffmpeg уже есть, укажите его файл.',
+        linux:
+          'Установите ffmpeg из репозитория вашей системы, например командой «sudo apt install ffmpeg», и нажмите «Проверить снова». Если ffmpeg уже есть, укажите его файл.',
+      },
+    },
     projects: { title: 'Проекты' },
   },
   addProjects: {

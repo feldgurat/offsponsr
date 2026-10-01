@@ -9,7 +9,7 @@ import { useDownloadsStore } from '@/stores/downloads'
 import { useSyncStore } from '@/stores/sync'
 import { useThemeStore } from '@/stores/theme'
 
-import { fakeBackend, LIBRARY } from './backend'
+import { fakeBackend, ffmpeg, LIBRARY } from './backend'
 
 async function mountApp() {
   const router = createAppRouter()
@@ -50,7 +50,7 @@ describe('App', () => {
       '/api/library': () => Response.json({ library: LIBRARY, last_failure: null }),
       '/api/sync/history': () => Response.json([]),
       '/api/downloads/failed': () => Response.json({ total: 0, items: [] }),
-      '/api/ffmpeg': () => Response.json({ found: true, path: 'ffmpeg' }),
+      '/api/ffmpeg': () => Response.json(ffmpeg()),
     })
     const wrapper = await mountApp()
     const links = wrapper.findAll('.app__nav a')

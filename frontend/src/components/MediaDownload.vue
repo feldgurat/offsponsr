@@ -5,6 +5,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { MediaInfo } from '@/api/types'
+import FfmpegOffer from '@/components/FfmpegOffer.vue'
 import { useFormat } from '@/composables/format'
 import { useDownloadsStore } from '@/stores/downloads'
 import { useMediaStore } from '@/stores/media'
@@ -82,6 +83,7 @@ const reason = computed(() => {
         <template #icon><ReloadOutlined /></template>
         {{ t('media.retry') }}
       </Button>
+      <FfmpegOffer v-if="media.error === 'no_ffmpeg'" size="small" />
     </template>
     <Button v-else size="small" @click="actions.download(media.id)">
       <template #icon><DownloadOutlined /></template>

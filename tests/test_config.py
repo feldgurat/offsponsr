@@ -67,6 +67,16 @@ def test_update_changes_only_what_is_named(config_store):
     assert config_store.load() == updated
 
 
+def test_ffmpeg_path_is_kept_and_can_be_taken_back(config_store):
+    config_store.update(ffmpeg_path='C:/tools/ffmpeg.exe')
+    assert config_store.load() == AppConfig(ffmpeg_path='C:/tools/ffmpeg.exe')
+
+    assert config_store.update(ffmpeg_path=None) == AppConfig()
+
+    with pytest.raises(ValueError, match='ffmpeg_path'):
+        config_store.update(ffmpeg_path=5)
+
+
 def test_update_refuses_bad_values(config_store):
     with pytest.raises(ValueError, match='theme'):
         config_store.update(theme='pink')

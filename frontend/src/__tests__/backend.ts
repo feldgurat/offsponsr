@@ -3,6 +3,7 @@ import { vi } from 'vitest'
 import type {
   AccountInfo,
   FeedPage,
+  FfmpegInfo,
   LibraryInfo,
   LibraryStatus,
   MediaInfo,
@@ -108,6 +109,23 @@ export function post(changes: Partial<PostDetails> = {}): PostDetails {
 export function feedPage(posts: PostCard[], changes: Partial<FeedPage> = {}): FeedPage {
   return { total: posts.length, page: 1, per_page: 20, posts, ...changes }
 }
+
+/** What the backend tells about ffmpeg: found on a Windows computer with winget, unless changed. */
+export function ffmpeg(changes: Partial<FfmpegInfo> = {}): FfmpegInfo {
+  return {
+    found: true,
+    path: 'C:\\ffmpeg\\bin\\ffmpeg.exe',
+    version: '9.0.2-essentials_build',
+    chosen: false,
+    can_install: true,
+    installing: false,
+    error: null,
+    platform: 'windows',
+    ...changes,
+  }
+}
+
+export const NO_FFMPEG = ffmpeg({ found: false, path: null, version: null })
 
 export const LIBRARY: LibraryInfo = { id: 'library-id', path: 'D:\\Библиотека' }
 

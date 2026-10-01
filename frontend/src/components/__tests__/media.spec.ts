@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { fakeBackend, media } from '@/__tests__/backend'
+import { fakeBackend, ffmpeg, media, NO_FFMPEG } from '@/__tests__/backend'
 import { buttonIn, withPlugins } from '@/__tests__/mounting'
 import EmbedFrame from '@/components/EmbedFrame.vue'
 import MediaAttachment from '@/components/MediaAttachment.vue'
@@ -91,7 +91,30 @@ describe('MediaDownload', () => {
     buttonIn(wrapper.element, 'Повторить').click()
     await flushPromises()
 
-    expect(backend.calls()).toEqual(['POST /api/media/5/download'])
+    expect(backend.calls()).toContain('POST /api/media/5/download')
+  })
+
+  it('offers to install ffmpeg where a video failed for the lack of it', async () => {
+    fakeBackend({ '/api/ffmpeg': () => Response.json(NO_FFMPEG) })
+    const video = mount(MediaDownload, {
+      ...withPlugins(),
+      props: { media: media({ id: 5, kind: 'video', state: 'error', error: 'no_ffmpeg' }) },
+    })
+    const other = mount(MediaDownload, {
+      ...withPlugins(),
+      props: { media: media({ id: 6, kind: 'video', state: 'error', error: 'player_changed' }) },
+    })
+    await flushPromises()
+
+    expect(buttonIn(video.element, 'Установить ffmpeg')).toBeTruthy()
+    expect(other.text()).not.toContain('Установить ffmpeg')
+
+    // Once there is an ffmpeg, only trying again is left.
+    useSyncStore().handle({ type: 'ffmpeg', state: ffmpeg() })
+    await flushPromises()
+
+    expect(video.text()).not.toContain('Установить ffmpeg')
+    expect(buttonIn(video.element, 'Повторить')).toBeTruthy()
   })
 
   it('forgets the click once the backend reports the file', async () => {

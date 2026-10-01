@@ -69,6 +69,9 @@ POST_COVER = 'post_cover'
 PROJECT_LOGO = 'project_logo'
 PROJECT_COVER = 'project_cover'
 
+# The error of a video that could not be put together for the lack of ffmpeg.
+NO_FFMPEG = 'no_ffmpeg'
+
 
 @dataclass(frozen=True)
 class Task:
@@ -249,21 +252,22 @@ class DownloadService:
             db.commit()
         return self._enqueue(library, [Task(MEDIA, media_id)])
 
-    def enqueue_failed(self) -> int:
-        """Queue again every file whose download failed."""
+    def enqueue_failed(self, error: str | None = None) -> int:
+        """Queue again every file whose download failed, or only those that failed with `error`."""
         library = self._libraries.current
         if library is None:
             return 0
         with library.session() as db:
             failed = select(Media.id).where(Media.state == MediaState.ERROR, Media.kind != MediaKind.EMBED)
+            if error is not None:
+                failed = failed.where(Media.error == error)
             media_ids = list(db.scalars(failed.order_by(Media.id)))
             self._mark_queued(db, media_ids)
             db.commit()
+        for media_id in media_ids:
+            # A page showing the file as failed reads its row again.
+            self._events.publish({'type': 'file', 'kind': MEDIA, 'id': media_id})
         return self._enqueue(library, [Task(MEDIA, media_id) for media_id in media_ids])
-
-    def ffmpeg_path(self) -> Path | None:
-        """The ffmpeg the video downloads would use right now, if there is one."""
-        return self._find_ffmpeg()
 
     @staticmethod
     def _mark_queued(db: Session, media_ids: list[int]) -> None:
@@ -417,7 +421,7 @@ class DownloadService:
             if kind == MediaKind.VIDEO:
                 ffmpeg = self._find_ffmpeg()
                 if ffmpeg is None:
-                    raise DownloadError('no_ffmpeg')
+                    raise DownloadError(NO_FFMPEG)
                 kinescope.download(
                     self._public,
                     source_url,

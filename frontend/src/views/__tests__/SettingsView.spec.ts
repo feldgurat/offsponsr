@@ -2,7 +2,16 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { fakeBackend, LIBRARY, PROJECT, SETTINGS, SIGNED_IN, SIGNED_OUT } from '@/__tests__/backend'
+import {
+  fakeBackend,
+  ffmpeg,
+  LIBRARY,
+  NO_FFMPEG,
+  PROJECT,
+  SETTINGS,
+  SIGNED_IN,
+  SIGNED_OUT,
+} from '@/__tests__/backend'
 import { buttonIn, withPlugins } from '@/__tests__/mounting'
 import { useAccountStore } from '@/stores/account'
 import { useLibraryStore } from '@/stores/library'
@@ -15,7 +24,7 @@ import SettingsView from '@/views/SettingsView.vue'
 function backend(replies: Parameters<typeof fakeBackend>[0] = {}) {
   return fakeBackend({
     '/api/projects': () => Response.json([PROJECT]),
-    '/api/ffmpeg': () => Response.json({ found: true, path: 'C:\\ffmpeg\\ffmpeg.exe' }),
+    '/api/ffmpeg': () => Response.json(ffmpeg()),
     '/api/settings': (_url, init) =>
       Response.json({ ...SETTINGS, ...JSON.parse(String(init?.body ?? '{}')) }),
     ...replies,
@@ -127,15 +136,142 @@ describe('SettingsView', () => {
     expect(buttonIn(wrapper.element, 'Создать новую').disabled).toBe(true)
   })
 
-  it('tells whether there is an ffmpeg', async () => {
-    backend()
-    const found = await mountSettings()
-    expect(found.text()).toContain('C:\\ffmpeg\\ffmpeg.exe')
-    found.unmount()
+  describe('ffmpeg', () => {
+    it('tells which ffmpeg the videos are put together with', async () => {
+      backend()
 
-    backend({ '/api/ffmpeg': () => Response.json({ found: false, path: null }) })
-    const missing = await mountSettings()
-    expect(missing.text()).toContain('Не найден ffmpeg')
+      const wrapper = await mountSettings()
+
+      expect(wrapper.text()).toContain('Найден, видео будет собираться им:')
+      expect(wrapper.text()).toContain('C:\\ffmpeg\\bin\\ffmpeg.exe')
+      expect(wrapper.text()).toContain('Версия 9.0.2-essentials_build')
+      expect(wrapper.text()).not.toContain('Установить ffmpeg')
+      expect(wrapper.text()).not.toContain('Проверить снова')
+    })
+
+    it('installs ffmpeg with winget after a yes', async () => {
+      const api = backend({
+        '/api/ffmpeg': () => Response.json(NO_FFMPEG),
+        '/api/ffmpeg/install': () => Response.json({ ...NO_FFMPEG, installing: true }),
+      })
+      const wrapper = await mountSettings()
+      expect(wrapper.text()).toContain('Не найден ffmpeg')
+      expect(wrapper.text()).toContain('offsponsr может установить ffmpeg сам')
+
+      buttonIn(wrapper.element, 'Установить ffmpeg').click()
+      await flushPromises()
+
+      // Nothing is installed before the user has read what will be done and agreed.
+      expect(document.body.textContent).toContain('winget install Gyan.FFmpeg.Essentials')
+      expect(document.body.textContent).toContain('около 110 МБ')
+      expect(api.calls()).not.toContain('POST /api/ffmpeg/install')
+
+      buttonIn(document.body, 'Установить').click()
+      await flushPromises()
+
+      expect(api.calls()).toContain('POST /api/ffmpeg/install')
+      expect(wrapper.text()).toContain('ffmpeg устанавливается…')
+      expect(buttonIn(wrapper.element, 'Проверить снова').disabled).toBe(true)
+
+      // winget is through: the backend tells, the page shows the ffmpeg.
+      useSyncStore().handle({ type: 'ffmpeg', state: ffmpeg() })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('C:\\ffmpeg\\bin\\ffmpeg.exe')
+      expect(wrapper.text()).not.toContain('ffmpeg устанавливается…')
+    })
+
+    it('tells why the installation failed', async () => {
+      backend({ '/api/ffmpeg': () => Response.json({ ...NO_FFMPEG, error: 'install_failed' }) })
+
+      const wrapper = await mountSettings()
+
+      expect(wrapper.text()).toContain('winget не смог установить ffmpeg')
+    })
+
+    it('explains what to do on a Windows without winget', async () => {
+      const api = backend({
+        '/api/ffmpeg': () => Response.json({ ...NO_FFMPEG, can_install: false }),
+        '/api/open-link': () => new Response(null, { status: 204 }),
+      })
+      const wrapper = await mountSettings()
+
+      expect(wrapper.text()).toContain('На этом компьютере нет winget')
+      expect(wrapper.text()).not.toContain('Установить ffmpeg')
+
+      buttonIn(wrapper.element, 'Открыть gyan.dev').click()
+      await flushPromises()
+
+      expect(api.bodyOf('/api/open-link')).toEqual({ url: 'https://www.gyan.dev/ffmpeg/builds/' })
+    })
+
+    it('names the way to install ffmpeg on the other systems', async () => {
+      backend({
+        '/api/ffmpeg': () => Response.json({ ...NO_FFMPEG, can_install: false, platform: 'macos' }),
+      })
+      const mac = await mountSettings()
+      expect(mac.text()).toContain('brew install ffmpeg')
+      expect(mac.text()).not.toContain('gyan.dev')
+      mac.unmount()
+
+      backend({
+        '/api/ffmpeg': () => Response.json({ ...NO_FFMPEG, can_install: false, platform: 'linux' }),
+      })
+      const linux = await mountSettings()
+      expect(linux.text()).toContain('sudo apt install ffmpeg')
+    })
+
+    it('looks for ffmpeg again when asked', async () => {
+      const api = backend({
+        '/api/ffmpeg': () => Response.json({ ...NO_FFMPEG, can_install: false }),
+        '/api/ffmpeg/check': () => Response.json(ffmpeg({ can_install: false })),
+      })
+      const wrapper = await mountSettings()
+
+      buttonIn(wrapper.element, 'Проверить снова').click()
+      await flushPromises()
+
+      expect(api.calls()).toContain('POST /api/ffmpeg/check')
+      expect(wrapper.text()).toContain('Найден, видео будет собираться им:')
+    })
+
+    it('lets the user point at their ffmpeg and take that back', async () => {
+      const mine = ffmpeg({ path: 'D:\\tools\\ffmpeg.exe', chosen: true })
+      const api = backend({
+        '/api/ffmpeg/choose': () => Response.json(mine),
+        '/api/ffmpeg/choice': () => Response.json(ffmpeg()),
+      })
+      const wrapper = await mountSettings()
+      expect(wrapper.text()).not.toContain('Забыть указанный файл')
+
+      buttonIn(wrapper.element, 'Указать файл ffmpeg…').click()
+      await flushPromises()
+
+      // The file is picked in the system's dialog; the page sends no path.
+      expect(api.calls()).toContain('POST /api/ffmpeg/choose')
+      expect(wrapper.text()).toContain('Указан вами, видео будет собираться им:')
+      expect(wrapper.text()).toContain('D:\\tools\\ffmpeg.exe')
+
+      buttonIn(wrapper.element, 'Забыть указанный файл').click()
+      await flushPromises()
+
+      expect(api.calls()).toContain('DELETE /api/ffmpeg/choice')
+      expect(wrapper.text()).toContain('C:\\ffmpeg\\bin\\ffmpeg.exe')
+    })
+
+    it('says so when the file pointed at is not an ffmpeg', async () => {
+      backend({
+        '/api/ffmpeg/choose': () => Response.json({ code: 'not_ffmpeg' }, { status: 422 }),
+      })
+      const wrapper = await mountSettings()
+
+      buttonIn(wrapper.element, 'Указать файл ffmpeg…').click()
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Этот файл не похож на ffmpeg')
+      // What was there stays.
+      expect(wrapper.text()).toContain('C:\\ffmpeg\\bin\\ffmpeg.exe')
+    })
   })
 
   it('has the settings of every project', async () => {

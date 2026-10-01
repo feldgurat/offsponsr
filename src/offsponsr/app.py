@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import secrets
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -47,6 +48,14 @@ def pick_folder() -> Path | None:
     return Path(selected[0]) if selected else None
 
 
+def pick_program() -> Path | None:
+    """Show the system file dialog over the app window, for pointing at a program."""
+    # The name is checked by whoever asked; the dialog can only filter by extension.
+    file_types = ('ffmpeg (*.exe)',) if sys.platform == 'win32' else ('ffmpeg (*)',)
+    selected = webview.windows[0].create_file_dialog(webview.FileDialog.OPEN, file_types=file_types)
+    return Path(selected[0]) if selected else None
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     args = parse_args(argv)
     setup_logging(console=args.dev)
@@ -54,7 +63,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     config = ConfigStore()
     libraries = LibraryManager(config)
     libraries.open_last()
-    services = Services.build(libraries, AccountService(libraries, run_login_window), pick_folder, config)
+    services = Services.build(libraries, AccountService(libraries, run_login_window), pick_folder, pick_program, config)
 
     launch_token = secrets.token_urlsafe(32)
     server = BackgroundServer(create_app(launch_token, services), port=DEV_API_PORT if args.dev else 0)

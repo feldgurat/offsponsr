@@ -3,7 +3,10 @@
 import base64
 import io
 import json
+import subprocess
+import threading
 from email.message import Message
+from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import requests
@@ -347,7 +350,7 @@ class BrokenKeyring(KeyringBackend):
 
 
 class FakeFolderPicker:
-    """Stands in for the system folder dialog: returns whatever the test put in `choice`."""
+    """Stands in for a system dialog (pick a folder, pick a program): returns what the test put in `choice`."""
 
     def __init__(self):
         self.choice = None
@@ -399,3 +402,53 @@ class FakeShell:
 
     def reveal(self, path):
         self._record('reveal', path)
+
+
+FFMPEG_VERSION = '9.0.2-tests'
+
+
+class FakeMachine:
+    """Stands in for what the computer has of ffmpeg and winget; nothing real is looked for or run.
+
+    `ffmpeg` is the one a search would find, `winget` the installer. An installation goes the
+    way `installs` says: 'ok' puts an ffmpeg in place, 'fails' leaves things as they were,
+    'hangs' runs out of time. Clearing `go` holds an installation until it is set again.
+    """
+
+    def __init__(self, folder):
+        self.folder = folder
+        self.ffmpeg = self.make_ffmpeg('ffmpeg-for-tests')
+        self.winget = folder / 'winget.exe'
+        self.installs = 'ok'
+        self.go = threading.Event()
+        self.go.set()
+        self.runs = []
+
+    def make_ffmpeg(self, name):
+        path = self.folder / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f'ffmpeg version {FFMPEG_VERSION}', encoding='ascii')
+        return path
+
+    def find(self, configured=None):
+        if configured and Path(configured).is_file():
+            return Path(configured)
+        return self.ffmpeg
+
+    @staticmethod
+    def version(path):
+        said = path.read_bytes()
+        return said.split()[-1].decode() if said.startswith(b'ffmpeg version ') else None
+
+    def find_winget(self):
+        return self.winget
+
+    def run(self, winget):
+        self.runs.append(winget)
+        self.go.wait(10)
+        if self.installs == 'hangs':
+            raise subprocess.TimeoutExpired('winget', 1)
+        if self.installs == 'ok':
+            self.ffmpeg = self.make_ffmpeg('installed/ffmpeg.exe')
+            return 0
+        return 1

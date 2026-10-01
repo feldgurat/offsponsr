@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { fakeBackend, media, post } from '@/__tests__/backend'
+import { fakeBackend, media, NO_FFMPEG, post } from '@/__tests__/backend'
 import { routerAt, withPlugins } from '@/__tests__/mounting'
 import type { MediaInfo } from '@/api/types'
 import PostBody from '@/components/PostBody.vue'
@@ -185,6 +185,50 @@ describe('PostBody', () => {
     expect(backend.bodyOf('/api/open-link')).toEqual({
       url: 'https://sponsr.ru/another-project/555/',
     })
+  })
+
+  it("leaves the links of the app's own controls to the app", async () => {
+    const backend = fakeBackend({
+      '/api/ffmpeg': () => Response.json({ ...NO_FFMPEG, can_install: false }),
+      '/api/open-link': () => new Response(null, { status: 204 }),
+    })
+    const router = await routerAt('/posts/9101')
+    const video = media({ id: 7, kind: 'video', state: 'error', error: 'no_ffmpeg' })
+    const wrapper = mount(PostBody, {
+      ...withPlugins(router),
+      props: {
+        html: '<iframe src="https://kinescope.io/abc" data-media="7"></iframe>',
+        media: [video],
+      },
+      attachTo: document.body,
+    })
+    await flushPromises()
+
+    const link = wrapper
+      .findAll('a')
+      .find((candidate) => candidate.text() === 'Как установить ffmpeg')!
+    link.element.click()
+    await flushPromises()
+
+    // The link leads to the settings; it is not taken for an address on sponsr.ru.
+    expect(router.currentRoute.value.fullPath).toBe('/settings')
+    expect(backend.requests()).not.toContain('/api/open-link')
+  })
+
+  it("does not trust a post that marks its links as the app's own", async () => {
+    const backend = fakeBackend({ '/api/open-link': () => new Response(null, { status: 204 }) })
+    const router = await routerAt('/posts/9101')
+    const wrapper = mount(PostBody, {
+      ...withPlugins(router),
+      props: { html: '<a href="https://example.com/x" data-post-link="no">ссылка</a>' },
+      attachTo: document.body,
+    })
+
+    wrapper.find('a').element.click()
+    await flushPromises()
+
+    expect(router.currentRoute.value.fullPath).toBe('/posts/9101')
+    expect(backend.bodyOf('/api/open-link')).toEqual({ url: 'https://example.com/x' })
   })
 
   it('goes nowhere on a link it has no business following', async () => {

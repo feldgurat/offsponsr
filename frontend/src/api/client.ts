@@ -64,6 +64,10 @@ export const api = {
     return request<T>(path, withBody('PATCH', body))
   },
 
+  delete<T = void>(path: string): Promise<T> {
+    return request<T>(path, { method: 'DELETE' })
+  },
+
   post<T = void>(path: string, body?: unknown): Promise<T> {
     if (body === undefined) {
       return request<T>(path, { method: 'POST' })

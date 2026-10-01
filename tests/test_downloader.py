@@ -221,6 +221,42 @@ def test_video_without_ffmpeg(libraries, account, events, synced, media_host):
     assert service.state().failed == 1
 
 
+def test_only_the_files_that_failed_for_one_reason_can_be_tried_again(
+    downloads, synced, media_host, machine, events, sponsr, monkeypatch
+):
+    machine.ffmpeg = None
+    sponsr.patterns.append((file_url(PID, site_data.POST_AUDIO, '6001'), lambda request: (404, b'', [])))
+    rows = media_rows(synced)
+    downloads.enqueue_media(rows[MediaKind.VIDEO].id)
+    downloads.enqueue_media(rows[MediaKind.AUDIO].id)
+    wait_until_idle(downloads)
+    rows = media_rows(synced)
+    assert rows[MediaKind.VIDEO].error == 'no_ffmpeg'
+    assert rows[MediaKind.AUDIO].state is MediaState.ERROR
+
+    def fake_download(http, embed_url, dest, **options):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b'video')
+
+    monkeypatch.setattr(kinescope, 'download', fake_download)
+    machine.ffmpeg = machine.make_ffmpeg('installed/ffmpeg')
+    listener = events.subscribe()
+
+    assert downloads.enqueue_failed('no_ffmpeg') == 1
+    wait_until_idle(downloads)
+
+    rows = media_rows(synced)
+    assert rows[MediaKind.VIDEO].state is MediaState.DONE
+    assert rows[MediaKind.AUDIO].state is MediaState.ERROR
+    # The pages showing the video as failed are told to read it again, before the download and after.
+    files = []
+    while (event := listener.get(0)) is not None:
+        if event['type'] == 'file':
+            files.append(event['id'])
+    assert files == [rows[MediaKind.VIDEO].id] * 2
+    assert downloads.enqueue_failed('no_ffmpeg') == 0
+
+
 @pytest.mark.parametrize(
     ('failure', 'code'),
     [(DownloadError('player_changed'), 'player_changed'), (FfmpegError('boom'), 'ffmpeg_failed')],

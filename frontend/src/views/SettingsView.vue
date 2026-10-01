@@ -11,13 +11,15 @@ import {
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { api } from '@/api/client'
-import type { FfmpegInfo, ThemeMode } from '@/api/types'
+import type { ThemeMode } from '@/api/types'
 import CookieLoginModal from '@/components/CookieLoginModal.vue'
+import FfmpegOffer from '@/components/FfmpegOffer.vue'
 import ProjectSettingsForm from '@/components/ProjectSettingsForm.vue'
 import { useAccountStore } from '@/stores/account'
 import { useDownloadsStore } from '@/stores/downloads'
+import { useFfmpegStore } from '@/stores/ffmpeg'
 import { useLibraryStore } from '@/stores/library'
+import { useMediaStore } from '@/stores/media'
 import { useProjectsStore } from '@/stores/projects'
 import { useSyncStore } from '@/stores/sync'
 import { useThemeStore } from '@/stores/theme'
@@ -29,18 +31,17 @@ const account = useAccountStore()
 const projects = useProjectsStore()
 const sync = useSyncStore()
 const downloads = useDownloadsStore()
+const ffmpeg = useFfmpegStore()
+const media = useMediaStore()
 
-const ffmpeg = ref<FfmpegInfo | null>(null)
 const cookieModalOpen = ref(false)
 const themes: ThemeMode[] = ['system', 'light', 'dark']
 
+/** Where the builds of ffmpeg for Windows are, for a computer the app can't install one on. */
+const FFMPEG_BUILDS = 'https://www.gyan.dev/ffmpeg/builds/'
+
 onMounted(() => {
-  void api
-    .get<FfmpegInfo>('/ffmpeg')
-    .then((info) => {
-      ffmpeg.value = info
-    })
-    .catch(() => undefined)
+  void ffmpeg.load().catch(() => undefined)
   if (!projects.loaded) {
     void projects.load().catch(() => undefined)
   }
@@ -59,6 +60,11 @@ function libraryError(code: string): string {
   // `sync_running` comes from the backend when something is still being written into the library.
   const key = code === 'sync_running' ? 'settings.library.busy' : `libraryError.${code}`
   return t(te(key) ? key : 'libraryError.unknown')
+}
+
+function ffmpegError(code: string): string {
+  const key = `ffmpeg.errors.${code}`
+  return t(te(key) ? key : 'ffmpeg.errors.unknown')
 }
 </script>
 
@@ -125,17 +131,59 @@ function libraryError(code: string): string {
       />
     </Card>
 
-    <Card size="small" :title="t('settings.ffmpeg.title')">
-      <template v-if="ffmpeg?.found">
-        <p class="settings__line">{{ t('settings.ffmpeg.found') }}</p>
-        <code class="settings__path">{{ ffmpeg.path }}</code>
+    <Card v-if="ffmpeg.info" size="small" :title="t('settings.ffmpeg.title')">
+      <template v-if="ffmpeg.info.found">
+        <p class="settings__line">
+          {{ t(ffmpeg.info.chosen ? 'settings.ffmpeg.chosen' : 'settings.ffmpeg.found') }}
+        </p>
+        <code class="settings__path">{{ ffmpeg.info.path }}</code>
+        <p v-if="ffmpeg.info.version" class="settings__hint">
+          {{ t('settings.ffmpeg.version', { version: ffmpeg.info.version }) }}
+        </p>
       </template>
+      <template v-else>
+        <Alert
+          type="warning"
+          show-icon
+          :message="t('ffmpeg.missing')"
+          :description="t('ffmpeg.missingHint')"
+        />
+        <p v-if="ffmpeg.info.can_install" class="settings__line settings__line--spaced">
+          {{ t('settings.ffmpeg.canInstall') }}
+        </p>
+        <p v-else class="settings__line settings__line--spaced">
+          {{ t(`settings.ffmpeg.hints.${ffmpeg.info.platform}`) }}
+        </p>
+      </template>
+
+      <div class="settings__row settings__row--spaced">
+        <FfmpegOffer v-if="ffmpeg.info.can_install" type="primary" />
+        <Button
+          v-else-if="!ffmpeg.info.found && ffmpeg.info.platform === 'windows'"
+          @click="media.openLink(FFMPEG_BUILDS)"
+        >
+          {{ t('settings.ffmpeg.builds') }}
+        </Button>
+        <Button :disabled="ffmpeg.busy || ffmpeg.info.installing" @click="ffmpeg.choose()">
+          {{ t('settings.ffmpeg.choose') }}
+        </Button>
+        <Button v-if="ffmpeg.info.chosen" :disabled="ffmpeg.busy" @click="ffmpeg.forget()">
+          {{ t('settings.ffmpeg.forget') }}
+        </Button>
+        <Button
+          v-if="!ffmpeg.info.found"
+          :disabled="ffmpeg.busy || ffmpeg.info.installing"
+          @click="ffmpeg.check()"
+        >
+          {{ t('settings.ffmpeg.check') }}
+        </Button>
+      </div>
       <Alert
-        v-else-if="ffmpeg"
-        type="warning"
+        v-if="ffmpeg.failure || ffmpeg.info.error"
+        class="settings__alert"
+        type="error"
         show-icon
-        :message="t('syncPage.noFfmpeg')"
-        :description="t('syncPage.noFfmpegHint')"
+        :message="ffmpegError(ffmpeg.failure ?? ffmpeg.info.error ?? '')"
       />
     </Card>
 
@@ -181,8 +229,20 @@ function libraryError(code: string): string {
   overflow-wrap: anywhere;
 }
 
+.settings__row--spaced {
+  margin-top: 12px;
+}
+
 .settings__line {
   margin: 0 0 4px;
+}
+
+.settings__line--spaced {
+  margin-top: 12px;
+}
+
+.settings__alert {
+  margin-top: 12px;
 }
 
 .settings__hint {

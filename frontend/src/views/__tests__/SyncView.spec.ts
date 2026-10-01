@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { fakeBackend, IDLE, PROJECT, SIGNED_IN } from '@/__tests__/backend'
+import { fakeBackend, ffmpeg, IDLE, NO_FFMPEG, PROJECT, SIGNED_IN } from '@/__tests__/backend'
 import { buttonIn, withPlugins } from '@/__tests__/mounting'
 import type { FailedDownloads, SyncRun } from '@/api/types'
 import { useAccountStore } from '@/stores/account'
@@ -30,7 +30,7 @@ function backend(replies: Parameters<typeof fakeBackend>[0] = {}) {
       Response.json([PROJECT, { ...PROJECT, id: 5151, title: 'Второй проект' }]),
     '/api/sync/history': () => Response.json([]),
     '/api/downloads/failed': () => Response.json(NO_FAILURES),
-    '/api/ffmpeg': () => Response.json({ found: true, path: 'C:\\ffmpeg\\ffmpeg.exe' }),
+    '/api/ffmpeg': () => Response.json(ffmpeg()),
     ...replies,
   })
 }
@@ -194,12 +194,19 @@ describe('SyncView', () => {
     expect(wrapper.text()).toContain('Последние обновления')
   })
 
-  it('warns that videos cannot be put together without ffmpeg', async () => {
-    backend({ '/api/ffmpeg': () => Response.json({ found: false, path: null }) })
+  it('warns that videos cannot be put together without ffmpeg and offers to install it', async () => {
+    backend({ '/api/ffmpeg': () => Response.json(NO_FFMPEG) })
 
     const wrapper = await mountSync()
 
     expect(wrapper.text()).toContain('Не найден ffmpeg')
     expect(wrapper.text()).toContain('аудио и вложения скачиваются и без него')
+    expect(buttonIn(wrapper.element, 'Установить ffmpeg')).toBeTruthy()
+
+    // It has been installed: the backend says so, and the warning goes away.
+    useSyncStore().handle({ type: 'ffmpeg', state: ffmpeg() })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Не найден ffmpeg')
   })
 })
