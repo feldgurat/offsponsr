@@ -1,7 +1,6 @@
 from fastapi.testclient import TestClient
 
 from offsponsr import __version__
-from offsponsr.api import create_app
 from offsponsr.api.session import SESSION_COOKIE
 
 from .conftest import LAUNCH_TOKEN
@@ -43,8 +42,8 @@ def test_app_info(session_client):
     assert response.json() == {'name': 'offsponsr', 'version': __version__}
 
 
-def test_foreign_host_is_rejected(web_dir):
-    client = TestClient(create_app(LAUNCH_TOKEN, web_dir), base_url='http://evil.example')
+def test_foreign_host_is_rejected(make_app):
+    client = TestClient(make_app(), base_url='http://evil.example')
 
     assert client.post('/api/session', json={'token': LAUNCH_TOKEN}).status_code == 400
 
@@ -72,8 +71,8 @@ def test_frontend_does_not_leave_web_dir(client, web_dir):
     assert 'secret' not in client.get('/%2e%2e/secret.txt').text
 
 
-def test_frontend_not_built(tmp_path):
-    client = TestClient(create_app(LAUNCH_TOKEN, tmp_path / 'missing'), base_url='http://127.0.0.1')
+def test_frontend_not_built(make_app, tmp_path):
+    client = TestClient(make_app(web_dir=tmp_path / 'missing'), base_url='http://127.0.0.1')
 
     response = client.get('/')
 

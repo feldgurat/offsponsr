@@ -27,3 +27,6 @@ Thumbs.db
 
 # Local Claude Code settings
 .claude/settings.local.json
+
+# Scratch database of the alembic command line
+.alembic-dev.db

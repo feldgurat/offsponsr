@@ -14,10 +14,13 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, RouterView } from 'vue-router'
 
 import { useAppStore } from '@/stores/app'
+import { useLibraryStore } from '@/stores/library'
 import { useThemeStore } from '@/stores/theme'
+import WelcomeView from '@/views/WelcomeView.vue'
 
 const { t } = useI18n()
 const app = useAppStore()
+const library = useLibraryStore()
 const theme = useThemeStore()
 
 onMounted(() => app.load())
@@ -26,7 +29,7 @@ onMounted(() => app.load())
 <template>
   <ConfigProvider :locale="ruRU" :theme="theme.antConfig">
     <Layout class="app">
-      <LayoutHeader class="app__header">
+      <LayoutHeader v-if="library.current" class="app__header">
         <RouterLink class="app__brand" :to="{ name: 'library' }">{{ t('app.title') }}</RouterLink>
       </LayoutHeader>
 
@@ -38,6 +41,8 @@ onMounted(() => app.load())
           :sub-title="t('app.backendError.hint')"
         />
         <Spin v-else-if="app.status === 'loading'" class="app__spin" :tip="t('app.loading')" />
+        <!-- Nothing in the app works without a library, so there is nowhere else to go yet. -->
+        <WelcomeView v-else-if="!library.current" />
         <RouterView v-else />
       </LayoutContent>
 

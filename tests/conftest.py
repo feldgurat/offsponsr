@@ -2,8 +2,20 @@ import pytest
 from fastapi.testclient import TestClient
 
 from offsponsr.api import create_app
+from offsponsr.config import ConfigStore
+from offsponsr.library import LibraryManager
 
 LAUNCH_TOKEN = 'launch-token'
+
+
+class FakeFolderPicker:
+    """Stands in for the system folder dialog: returns whatever the test put in `choice`."""
+
+    def __init__(self):
+        self.choice = None
+
+    def __call__(self):
+        return self.choice
 
 
 @pytest.fixture
@@ -17,9 +29,35 @@ def web_dir(tmp_path):
 
 
 @pytest.fixture
-def client(web_dir):
+def config_store(tmp_path):
+    return ConfigStore(tmp_path / 'config' / 'config.json')
+
+
+@pytest.fixture
+def libraries(config_store):
+    manager = LibraryManager(config_store)
+    yield manager
+    # Open libraries hold file locks; Windows won't delete tmp_path until they are released.
+    manager.close()
+
+
+@pytest.fixture
+def folder_picker():
+    return FakeFolderPicker()
+
+
+@pytest.fixture
+def make_app(web_dir, libraries, folder_picker):
+    def make(*, web_dir=web_dir):
+        return create_app(LAUNCH_TOKEN, libraries, folder_picker, web_dir)
+
+    return make
+
+
+@pytest.fixture
+def client(make_app):
     # The app only answers to loopback host names, so the default `testserver` won't do.
-    return TestClient(create_app(LAUNCH_TOKEN, web_dir), base_url='http://127.0.0.1')
+    return TestClient(make_app(), base_url='http://127.0.0.1')
 
 
 @pytest.fixture

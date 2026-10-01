@@ -10,8 +10,10 @@ license = "BSD-3-Clause"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.20.0",
     "fastapi>=0.142.2",
     "pywebview>=6.2.1",
+    "sqlalchemy>=2.1.1",
     "uvicorn>=0.54.0",
 ]
 
@@ -54,3 +56,13 @@ artifacts = ["src/offsponsr/web"]
 testpaths = [
     "tests",
 ]
+
+[tool.alembic]
+script_location = "src/offsponsr/library/migrations"
+file_template = "%%(year)d%%(month).2d%%(day).2d_%%(rev)s_%%(slug)s"
+
+[[tool.alembic.post_write_hooks]]
+name = "ruff"
+type = "module"
+module = "ruff"
+options = "format REVISION_SCRIPT_FILENAME"

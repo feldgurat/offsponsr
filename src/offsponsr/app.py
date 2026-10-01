@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import argparse
 import secrets
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import webview
 
 from offsponsr import __version__
 from offsponsr.api import BackgroundServer, create_app
+from offsponsr.config import ConfigStore
+from offsponsr.library import LibraryManager
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -35,11 +38,23 @@ def window_url(origin: str, launch_token: str) -> str:
     return f'{origin}/?token={launch_token}'
 
 
+def pick_folder() -> Path | None:
+    """Show the system folder dialog over the app window."""
+    selected = webview.windows[0].create_file_dialog(webview.FileDialog.FOLDER)
+    return Path(selected[0]) if selected else None
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     args = parse_args(argv)
 
+    libraries = LibraryManager(ConfigStore())
+    libraries.open_last()
+
     launch_token = secrets.token_urlsafe(32)
-    server = BackgroundServer(create_app(launch_token), port=DEV_API_PORT if args.dev else 0)
+    server = BackgroundServer(
+        create_app(launch_token, libraries, pick_folder),
+        port=DEV_API_PORT if args.dev else 0,
+    )
     server.start()
     try:
         origin = DEV_FRONTEND_ORIGIN if args.dev else server.origin
@@ -47,6 +62,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         webview.start(debug=args.dev)
     finally:
         server.stop()
+        libraries.close()
 
 
 if __name__ == '__main__':

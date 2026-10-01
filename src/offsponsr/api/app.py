@@ -1,13 +1,15 @@
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, FastAPI, HTTPException, Response, status
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi import APIRouter, Cookie, Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from offsponsr import __version__
+from offsponsr.api.library import FolderPicker, library_router
 from offsponsr.api.session import SESSION_COOKIE, SessionGate
+from offsponsr.library import LibraryError, LibraryManager
 
 # `npm run build` in frontend/ puts the bundle here.
 WEB_DIR = Path(__file__).resolve().parent.parent / 'web'
@@ -25,12 +27,22 @@ class AppInfo(BaseModel):
     version: str
 
 
-def create_app(launch_token: str, web_dir: Path = WEB_DIR) -> FastAPI:
+def create_app(
+    launch_token: str,
+    libraries: LibraryManager,
+    pick_folder: FolderPicker,
+    web_dir: Path = WEB_DIR,
+) -> FastAPI:
     gate = SessionGate(launch_token)
 
     app = FastAPI(title='offsponsr', version=__version__, docs_url=None, redoc_url=None, openapi_url=None)
     # Blocks DNS rebinding: a page on another host name can't reach the API through the browser.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=['127.0.0.1', 'localhost'])
+
+    @app.exception_handler(LibraryError)
+    def library_error(_request: Request, error: LibraryError) -> JSONResponse:
+        # The UI turns `code` into a message in the user's language.
+        return JSONResponse({'code': error.code, 'path': str(error.path)}, status_code=status.HTTP_409_CONFLICT)
 
     def require_session(session_id: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None) -> None:
         if not gate.is_valid(session_id):
@@ -49,6 +61,8 @@ def create_app(launch_token: str, web_dir: Path = WEB_DIR) -> FastAPI:
     @protected.get('/app')
     def app_info() -> AppInfo:
         return AppInfo(name='offsponsr', version=__version__)
+
+    protected.include_router(library_router(libraries, pick_folder))
 
     app.include_router(public)
     app.include_router(protected)

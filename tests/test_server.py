@@ -4,13 +4,13 @@ import urllib.request
 
 import pytest
 
-from offsponsr.api import BackgroundServer, create_app
+from offsponsr.api import BackgroundServer
 
 from .conftest import LAUNCH_TOKEN
 
 
-def test_background_server_serves_and_stops(web_dir):
-    server = BackgroundServer(create_app(LAUNCH_TOKEN, web_dir))
+def test_background_server_serves_and_stops(make_app):
+    server = BackgroundServer(make_app())
     server.start()
     try:
         assert server.port > 0

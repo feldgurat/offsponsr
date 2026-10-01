@@ -1,33 +1,25 @@
 import { flushPromises } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { createOffsponsrApp } from '@/bootstrap'
 
-const fetchMock = vi.fn<typeof fetch>()
-
-beforeEach(() => {
-  vi.stubGlobal('fetch', fetchMock)
-})
+import { fakeBackend } from './backend'
 
 afterEach(() => {
-  fetchMock.mockReset()
   window.history.replaceState(null, '', '/')
 })
 
 describe('createOffsponsrApp', () => {
   it('keeps the launch token out of the URL once the router takes over', async () => {
     window.history.replaceState(null, '', '/?token=secret')
-    fetchMock.mockImplementation(async (input) =>
-      input === '/api/session'
-        ? new Response(null, { status: 204 })
-        : Response.json({ name: 'offsponsr', version: '1.2.3' }),
-    )
+    const backend = fakeBackend()
 
     const app = await createOffsponsrApp()
     const root = document.createElement('div')
     app.mount(root)
     await flushPromises()
 
+    expect(backend.bodyOf('/api/session')).toEqual({ token: 'secret' })
     expect(window.location.search).toBe('')
     expect(root.textContent).toContain('Версия 1.2.3')
 
@@ -36,7 +28,8 @@ describe('createOffsponsrApp', () => {
 
   it('still starts when the session cannot be opened', async () => {
     window.history.replaceState(null, '', '/?token=secret')
-    fetchMock.mockRejectedValue(new TypeError('network down'))
+    const backend = fakeBackend()
+    backend.fetchMock.mockRejectedValue(new TypeError('network down'))
 
     const app = await createOffsponsrApp()
     const root = document.createElement('div')
