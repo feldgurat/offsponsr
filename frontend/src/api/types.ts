@@ -31,3 +31,51 @@ export interface AccountInfo {
   /** The stored session stopped working; the user has to sign in again. */
   expired: boolean
 }
+
+export interface ProjectInfo {
+  id: number
+  url: string
+  title: string
+  added_via: 'subscription' | 'url'
+  sync_enabled: boolean
+  last_synced_at: string | null
+  /** Posts in the library, the ones deleted on the site included. */
+  posts: number
+  /** Readable posts whose whole text hasn't been downloaded yet. */
+  posts_without_text: number
+  posts_deleted: number
+}
+
+export interface SubscriptionInfo {
+  id: number
+  url: string
+  title: string
+  owner_name: string | null
+  level_name: string | null
+  in_library: boolean
+}
+
+export interface RunningSync {
+  project_id: number
+  title: string
+  posts_done: number
+  /** null until the site has told how many posts there are. */
+  posts_total: number | null
+}
+
+export interface SyncFailure {
+  project_id: number
+  title: string
+  code: string
+}
+
+export interface SyncInfo {
+  running: RunningSync | null
+  /** Ids of the projects waiting for their turn. */
+  queue: number[]
+  failures: SyncFailure[]
+  cancelling: boolean
+}
+
+/** What the backend pushes over /api/events. */
+export type ServerEvent = { type: 'sync'; state: SyncInfo } | { type: 'projects' }

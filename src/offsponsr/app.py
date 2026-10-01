@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import webview
 
 from offsponsr import __version__
-from offsponsr.api import BackgroundServer, create_app
+from offsponsr.api import BackgroundServer, Services, create_app
 from offsponsr.auth import AccountService
 from offsponsr.auth.login_window import run_login_window
 from offsponsr.config import ConfigStore
@@ -53,19 +53,17 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     libraries = LibraryManager(ConfigStore())
     libraries.open_last()
-    account = AccountService(libraries, run_login_window)
+    services = Services.build(libraries, AccountService(libraries, run_login_window), pick_folder)
 
     launch_token = secrets.token_urlsafe(32)
-    server = BackgroundServer(
-        create_app(launch_token, libraries, account, pick_folder),
-        port=DEV_API_PORT if args.dev else 0,
-    )
+    server = BackgroundServer(create_app(launch_token, services), port=DEV_API_PORT if args.dev else 0)
     server.start()
     try:
         origin = DEV_FRONTEND_ORIGIN if args.dev else server.origin
         webview.create_window(APP_TITLE, window_url(origin, launch_token), width=1280, height=860, min_size=(800, 600))
         webview.start(debug=args.dev)
     finally:
+        services.shutdown()
         server.stop()
         libraries.close()
 

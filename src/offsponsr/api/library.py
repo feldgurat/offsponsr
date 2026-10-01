@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from offsponsr.library import Library, LibraryManager
+from offsponsr.sync.service import SyncRunningError
 
 # Shows the system folder dialog; None if the user cancelled it.
 FolderPicker = Callable[[], Path | None]
@@ -38,8 +39,13 @@ def _info(library: Library) -> LibraryInfo:
     return LibraryInfo(id=library.id, path=str(library.root))
 
 
-def library_router(libraries: LibraryManager, pick_folder: FolderPicker) -> APIRouter:
+def library_router(libraries: LibraryManager, pick_folder: FolderPicker, is_busy: Callable[[], bool]) -> APIRouter:
     router = APIRouter()
+
+    def refuse_while_syncing() -> None:
+        # Switching closes the current library, and a running sync is writing into it.
+        if is_busy():
+            raise SyncRunningError
 
     @router.get('/library')
     def status() -> LibraryStatus:
@@ -52,10 +58,12 @@ def library_router(libraries: LibraryManager, pick_folder: FolderPicker) -> APIR
 
     @router.post('/library/create')
     def create(body: LibraryPath) -> LibraryInfo:
+        refuse_while_syncing()
         return _info(libraries.create(Path(body.path)))
 
     @router.post('/library/open')
     def open_existing(body: LibraryPath) -> LibraryInfo:
+        refuse_while_syncing()
         return _info(libraries.open(Path(body.path)))
 
     @router.post('/dialogs/folder')

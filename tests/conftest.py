@@ -3,10 +3,13 @@ import pytest
 from fastapi.testclient import TestClient
 from requests.adapters import HTTPAdapter
 
-from offsponsr.api import create_app
+from offsponsr.api import Services, create_app
 from offsponsr.auth import AccountService
 from offsponsr.config import ConfigStore
 from offsponsr.library import LibraryManager
+from offsponsr.sponsr import SponsrClient
+from offsponsr.sync.events import EventBus
+from offsponsr.sync.service import SyncService
 
 from .fakes import FakeFolderPicker, FakeLoginWindow, FakeSponsr, MemoryKeyring
 
@@ -84,9 +87,33 @@ def signed_in(account, library, sponsr):
 
 
 @pytest.fixture
-def make_app(web_dir, libraries, account, folder_picker):
+def events():
+    return EventBus()
+
+
+@pytest.fixture
+def sync_service(libraries, account, events):
+    # No pauses and no waiting between retries: the site is a fake and the tests are in a hurry.
+    return SyncService(
+        libraries,
+        account,
+        events,
+        make_client=lambda account: SponsrClient(account, pause=0, sleep=lambda seconds: None),
+    )
+
+
+@pytest.fixture
+def services(libraries, account, sync_service, events, folder_picker):
+    services = Services(libraries, account, sync_service, events, folder_picker)
+    yield services
+    # Before the `libraries` fixture closes the library the sync may still be writing to.
+    services.shutdown()
+
+
+@pytest.fixture
+def make_app(web_dir, services):
     def make(*, web_dir=web_dir):
-        return create_app(LAUNCH_TOKEN, libraries, account, folder_picker, web_dir)
+        return create_app(LAUNCH_TOKEN, services, web_dir)
 
     return make
 

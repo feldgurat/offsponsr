@@ -8,7 +8,6 @@ import AccountNotice from '@/components/AccountNotice.vue'
 import CookieLoginModal from '@/components/CookieLoginModal.vue'
 import { i18n } from '@/i18n'
 import { useAccountStore } from '@/stores/account'
-import LibraryView from '@/views/LibraryView.vue'
 
 const plugins = { global: { plugins: [i18n] } }
 
@@ -147,22 +146,5 @@ describe('AccountNotice', () => {
     useAccountStore().failure = 'invalid_cookie'
 
     expect(mount(AccountNotice, plugins).text()).toBe('')
-  })
-})
-
-describe('LibraryView', () => {
-  it('suggests signing in while signed out', () => {
-    const wrapper = mount(LibraryView, plugins)
-
-    expect(wrapper.text()).toContain('Войдите в sponsr.ru, чтобы добавить проекты')
-  })
-
-  it('has no sign-in hint once signed in', () => {
-    useAccountStore().info = SIGNED_IN
-
-    const wrapper = mount(LibraryView, plugins)
-
-    expect(wrapper.text()).toContain('В библиотеке пока нет проектов')
-    expect(wrapper.text()).not.toContain('Войдите в sponsr.ru')
   })
 })

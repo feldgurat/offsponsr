@@ -1,5 +1,6 @@
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Self
 
 from fastapi import APIRouter, Cookie, Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
@@ -9,9 +10,13 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from offsponsr import __version__
 from offsponsr.api.account import account_router
 from offsponsr.api.library import FolderPicker, library_router
+from offsponsr.api.projects import projects_router
 from offsponsr.api.session import SESSION_COOKIE, SessionGate
 from offsponsr.auth import AccountService, AuthError, InvalidCookieError, SiteUnavailableError
 from offsponsr.library import LibraryError, LibraryManager
+from offsponsr.sponsr import SponsrError
+from offsponsr.sync.events import EventBus
+from offsponsr.sync.service import InvalidAddressError, SyncError, SyncService, failure_code
 
 # `npm run build` in frontend/ puts the bundle here.
 WEB_DIR = Path(__file__).resolve().parent.parent / 'web'
@@ -29,13 +34,28 @@ class AppInfo(BaseModel):
     version: str
 
 
-def create_app(
-    launch_token: str,
-    libraries: LibraryManager,
-    account: AccountService,
-    pick_folder: FolderPicker,
-    web_dir: Path = WEB_DIR,
-) -> FastAPI:
+@dataclass(frozen=True)
+class Services:
+    """Everything the API hands requests over to."""
+
+    libraries: LibraryManager
+    account: AccountService
+    sync: SyncService
+    events: EventBus
+    pick_folder: FolderPicker
+
+    @classmethod
+    def build(cls, libraries: LibraryManager, account: AccountService, pick_folder: FolderPicker) -> Self:
+        events = EventBus()
+        return cls(libraries, account, SyncService(libraries, account, events), events, pick_folder)
+
+    def shutdown(self) -> None:
+        """Stop the background work and end the event streams, so the server and the library can close."""
+        self.sync.shutdown()
+        self.events.close()
+
+
+def create_app(launch_token: str, services: Services, web_dir: Path = WEB_DIR) -> FastAPI:
     gate = SessionGate(launch_token)
 
     app = FastAPI(title='offsponsr', version=__version__, docs_url=None, redoc_url=None, openapi_url=None)
@@ -57,6 +77,16 @@ def create_app(
             status_code = status.HTTP_409_CONFLICT
         return JSONResponse({'code': error.code}, status_code=status_code)
 
+    @app.exception_handler(SyncError)
+    def sync_error(_request: Request, error: SyncError) -> JSONResponse:
+        invalid = isinstance(error, InvalidAddressError)
+        status_code = status.HTTP_422_UNPROCESSABLE_CONTENT if invalid else status.HTTP_409_CONFLICT
+        return JSONResponse({'code': error.code}, status_code=status_code)
+
+    @app.exception_handler(SponsrError)
+    def site_error(_request: Request, error: SponsrError) -> JSONResponse:
+        return JSONResponse({'code': failure_code(error)}, status_code=status.HTTP_502_BAD_GATEWAY)
+
     def require_session(session_id: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None) -> None:
         if not gate.is_valid(session_id):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED)
@@ -75,8 +105,9 @@ def create_app(
     def app_info() -> AppInfo:
         return AppInfo(name='offsponsr', version=__version__)
 
-    protected.include_router(library_router(libraries, pick_folder))
-    protected.include_router(account_router(account))
+    protected.include_router(library_router(services.libraries, services.pick_folder, services.sync.is_busy))
+    protected.include_router(account_router(services.account))
+    protected.include_router(projects_router(services.libraries, services.sync, services.events))
 
     app.include_router(public)
     app.include_router(protected)

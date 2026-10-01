@@ -30,6 +30,60 @@ export default {
     title: 'Библиотека',
     empty: 'В библиотеке пока нет проектов',
     signInHint: 'Войдите в sponsr.ru, чтобы добавить проекты из ваших подписок.',
+    addHint: 'Добавьте проекты из ваших подписок или по ссылке.',
+    addProjects: 'Добавить проекты',
+    updateAll: 'Обновить всё',
+    update: 'Обновить',
+    // none | one | few | many
+    posts: 'нет постов | {n} пост | {n} поста | {n} постов',
+    neverSynced: 'ещё не скачан',
+    syncedAt: 'обновлён {date}',
+    withoutText: 'без полного текста: {n}',
+    running: 'Обновляется',
+    queued: 'В очереди',
+  },
+  addProjects: {
+    title: 'Добавить проекты',
+    subscriptions: 'Ваши подписки',
+    noSubscriptions: 'У этого аккаунта нет платных подписок.',
+    inLibrary: 'уже в библиотеке',
+    byAddress: 'Проект по ссылке',
+    addressPlaceholder: 'https://sponsr.ru/название-проекта/',
+    addressHint:
+      'Можно добавить любой проект. Скачаются только посты, которые открыты вашему аккаунту.',
+    submit: 'Добавить и скачать',
+    // Keyed by the error codes of the backend.
+    errors: {
+      not_signed_in: 'Войдите в sponsr.ru, чтобы увидеть подписки.',
+      session_expired: 'Сессия sponsr.ru истекла. Войдите заново.',
+      site_unavailable:
+        'sponsr.ru не отвечает. Проверьте подключение к интернету и попробуйте ещё раз.',
+      site_changed:
+        'sponsr.ru ответил в незнакомом формате: возможно, сайт изменился и нужна новая версия offsponsr.',
+      site_refused: 'sponsr.ru отказал в доступе.',
+      invalid_address: 'Это не похоже на адрес проекта на sponsr.ru.',
+      project_not_found: 'На sponsr.ru нет проекта с таким адресом.',
+      unknown: 'Не получилось. Подробности в журнале приложения.',
+    },
+  },
+  sync: {
+    running: 'Обновляется: {title}',
+    preparing: 'Подготовка…',
+    progress: '{done} из {total} постов',
+    queue: 'В очереди: {n}',
+    cancel: 'Отменить',
+    cancelling: 'Останавливается…',
+    failed: 'Не удалось обновить «{title}»',
+    // Keyed by the error codes of the backend.
+    errors: {
+      not_signed_in: 'Нужен вход в sponsr.ru.',
+      session_expired: 'Сессия sponsr.ru истекла. Войдите заново и запустите обновление ещё раз.',
+      site_unavailable: 'sponsr.ru не отвечает. Попробуйте позже.',
+      site_changed:
+        'sponsr.ru ответил в незнакомом формате: возможно, сайт изменился и нужна новая версия offsponsr.',
+      site_refused: 'sponsr.ru отказал в доступе к проекту.',
+      unknown: 'Неизвестная ошибка. Подробности в журнале приложения.',
+    },
   },
   account: {
     signIn: 'Войти',

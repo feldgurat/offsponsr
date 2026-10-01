@@ -2,7 +2,7 @@ import shutil
 
 from fastapi.testclient import TestClient
 
-from offsponsr.api import create_app
+from offsponsr.api import Services, create_app
 from offsponsr.auth import AccountService
 from offsponsr.library import Library, LibraryManager
 
@@ -73,7 +73,8 @@ def test_status_reports_why_the_last_library_did_not_open(config_store, folder_p
 
     libraries = LibraryManager(config_store)
     libraries.open_last()
-    app = create_app(LAUNCH_TOKEN, libraries, AccountService(libraries, login_window), folder_picker, web_dir)
+    services = Services.build(libraries, AccountService(libraries, login_window), folder_picker)
+    app = create_app(LAUNCH_TOKEN, services, web_dir)
     client = TestClient(app, base_url='http://127.0.0.1')
     client.post('/api/session', json={'token': LAUNCH_TOKEN})
 

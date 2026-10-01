@@ -106,6 +106,51 @@ def _tag(post_id, tag_id, name):
     }
 
 
+def post(post_id, title, date, *, html, truncated, level_id=LEVEL_BASIC, content_type='text', **extra):
+    """A readable post as the post list gives it."""
+    return _post(
+        post_id, title, date, html=html, truncated=truncated, level_id=level_id, content_type=content_type, **extra
+    )
+
+
+def closed_post(post_id, title, date, *, level_id=LEVEL_HIDDEN):
+    """A post the account can't read: it comes without its text and without a dozen other fields."""
+    return {
+        'id': post_id,
+        'project_id': PROJECT_ID,
+        'level_id': level_id,
+        'date': date,
+        'title': title,
+        'teaser': None,
+        'image': None,
+        'pinned': 0,
+        'access_type': None,
+        'access_value': 0,
+        'price_old': None,
+        'price': None,
+        'duration_podcast': 0,
+        'duration_text': 600,
+        'duration_video': 0,
+        'meta_description': None,
+        'cnt_likes': 0,
+        'cnt_comments': 0,
+        'project_access_type': 'active',
+        'tags': [],
+        'video_posters': [],
+        'available': False,
+        'isLiked': False,
+    }
+
+
+def tag(post_id, tag_id, name):
+    return _tag(post_id, tag_id, name)
+
+
+def marked(html):
+    """Text as the legacy list has it."""
+    return _marked(html)
+
+
 def _post(post_id, title, date, *, html, truncated, level_id=LEVEL_BASIC, content_type='text', **extra):
     post = {
         'id': post_id,

@@ -23,7 +23,9 @@ class BackgroundServer:
         self.port: int = self._socket.getsockname()[1]
 
         # log_config=None: uvicorn's default config writes to stdout, which a windowed build doesn't have.
-        self._server = uvicorn.Server(uvicorn.Config(app, log_config=None, access_log=False))
+        # A short grace period: an open event stream must not keep the app from quitting.
+        config = uvicorn.Config(app, log_config=None, access_log=False, timeout_graceful_shutdown=3)
+        self._server = uvicorn.Server(config)
         self._thread = threading.Thread(
             target=self._server.run,
             kwargs={'sockets': [self._socket]},

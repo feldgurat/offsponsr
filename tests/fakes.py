@@ -4,6 +4,7 @@ import base64
 import io
 import json
 from email.message import Message
+from urllib.parse import parse_qs, urlsplit
 
 import requests
 import urllib3
@@ -74,6 +75,8 @@ class FakeSponsr:
         # Access tokens the API currently accepts.
         self.tokens = set()
         self._issued = 0
+        # (URL prefix, route) pairs for addresses that vary, tried after `routes`.
+        self.patterns = []
         self.routes[REFRESH_URL] = self._refresh
         self.serve_project()
 
@@ -116,6 +119,26 @@ class FakeSponsr:
 
         self.routes[url] = route
 
+    def serve_feed(self, feed):
+        """Answer both post lists of a project from a FakeFeed, page by page."""
+
+        def posts(request):
+            token = request.headers.get('Authorization', '').removeprefix('Bearer ')
+            if token not in self.tokens:
+                return 401, {'message': 'Unauthorized', 'statusCode': 401}, []
+            page = int(parse_qs(urlsplit(request.url).query)['page'][0])
+            return 200, feed.posts_page(page), []
+
+        def more_posts(request):
+            offset = int(parse_qs(urlsplit(request.url).query)['offset'][0])
+            return 200, feed.more_posts(offset), []
+
+        # The feed replaces the fixed first page that serve_project() set up.
+        self.routes.pop(posts_url(project_id=feed.project_id), None)
+        self.routes.pop(more_posts_url(project_id=feed.project_id), None)
+        self.patterns.append((f'{API}/content/posts/?project_id={feed.project_id}&', posts))
+        self.patterns.append((f'{SITE}/project/{feed.project_id}/more-posts/?', more_posts))
+
     def revoke_tokens(self):
         """Stop accepting the access tokens handed out so far."""
         self.tokens.clear()
@@ -156,6 +179,8 @@ class FakeSponsr:
         self.requests.append(request)
         route = self.routes.get(request.url)
         if route is None:
+            route = next((found for prefix, found in reversed(self.patterns) if request.url.startswith(prefix)), None)
+        if route is None:
             raise requests.ConnectionError(f'No fake route for {request.url}')
 
         status, body, set_cookies, *extra = route(request)
@@ -178,6 +203,73 @@ class FakeSponsr:
             original_response=_OriginalResponse(headers),
         )
         return HTTPAdapter.build_response(adapter, request, raw)
+
+
+class FakeFeed:
+    """A project's posts on the fake site. Tests publish, edit and delete them between syncs."""
+
+    def __init__(self, project_id=site_data.PROJECT_ID):
+        self.project_id = project_id
+        # Newest first, as the site lists them: (post as the API list gives it, its whole text).
+        self.entries = []
+        # Posts the legacy list leaves out, as if the lists had shifted between two requests.
+        self.missing_from_legacy = set()
+
+    def publish(self, post_id, text, *, long=False, date=None, **fields):
+        """Put a readable post on top of the feed. A long post is listed with only its beginning."""
+        date = date or f'2026-01-01T00:00:{len(self.entries) % 60:02d}.000Z'
+        listed = site_data.post(
+            post_id,
+            fields.pop('title', f'Пост {post_id}'),
+            date,
+            html=text[: len(text) // 2] if long else text,
+            truncated=long,
+            **fields,
+        )
+        self.entries.insert(0, (listed, text))
+        return listed
+
+    def publish_closed(self, post_id, *, date='2026-01-01T00:00:00.000Z'):
+        listed = site_data.closed_post(post_id, f'Закрытый пост {post_id}', date)
+        self.entries.insert(0, (listed, ''))
+        return listed
+
+    def edit(self, post_id, text, *, long=False, updated_at='2026-02-02T00:00:00.000Z', **fields):
+        index = self._index(post_id)
+        listed, _ = self.entries[index]
+        listed = {
+            **listed,
+            'text': {'post_id': post_id, 'text': text[: len(text) // 2] if long else text, 'ts': updated_at},
+            'text_truncated': long,
+            'updated_at': updated_at,
+            **fields,
+        }
+        self.entries[index] = (listed, text)
+
+    def close(self, post_id):
+        """The account loses access to the post."""
+        index = self._index(post_id)
+        listed, _ = self.entries[index]
+        self.entries[index] = (site_data.closed_post(post_id, listed['title'], listed['date']), '')
+
+    def delete(self, post_id):
+        del self.entries[self._index(post_id)]
+
+    def _index(self, post_id):
+        return next(index for index, (listed, _) in enumerate(self.entries) if listed['id'] == post_id)
+
+    def posts_page(self, page):
+        start = (page - 1) * 20
+        chunk = [listed for listed, _ in self.entries[start : start + 20]]
+        return {'total': len(self.entries), 'page': page, 'limit': 20, 'list': chunk}
+
+    def more_posts(self, offset):
+        rows = [
+            {'post_id': listed['id'], 'post_text': site_data.marked(text), '_available': listed['available']}
+            for listed, text in self.entries[offset : offset + 20]
+            if listed['id'] not in self.missing_from_legacy
+        ]
+        return {'response': {'rows': rows, 'rows_count': len(self.entries), '_like': False}}
 
 
 class MemoryKeyring(KeyringBackend):
