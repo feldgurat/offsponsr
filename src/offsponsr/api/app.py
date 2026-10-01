@@ -197,8 +197,10 @@ def _serve_frontend(app: FastAPI, web_dir: Path) -> None:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
+        # The policy goes with every file: the page can be asked for by its own name as well.
+        headers = {'Content-Security-Policy': CONTENT_SECURITY_POLICY}
         asset = (web_dir / path).resolve()
         if asset.is_file() and asset.is_relative_to(web_dir):
-            return FileResponse(asset)
+            return FileResponse(asset, headers=headers)
         # Any other path is a client-side route.
-        return FileResponse(index, headers={'Content-Security-Policy': CONTENT_SECURITY_POLICY})
+        return FileResponse(index, headers=headers)

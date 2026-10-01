@@ -56,6 +56,20 @@ uv run pytest
 npm --prefix frontend run check
 ```
 
+## Сборка под Windows
+
+[PyInstaller](https://pyinstaller.org/) собирает приложение в папку `dist/offsponsr` с `offsponsr.exe`: её можно запускать без Python и Node.js. Нужен WebView2 Runtime; в Windows 11 он уже есть. Сначала собирается интерфейс, затем само приложение:
+
+```bash
+npm --prefix frontend run build
+```
+
+```bash
+uv run --group build pyinstaller offsponsr.spec --noconfirm
+```
+
+Это сборка для проверки: без установщика, значка и подписи.
+
 ## Лицензия
 
 BSD-3-Clause, см. [LICENSE](LICENSE). Код скачивания медиа переносится из [sponsrdump](https://github.com/idlesign/sponsrdump) (BSD-3-Clause, © Igor Starikov).

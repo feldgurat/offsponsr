@@ -70,8 +70,9 @@ def test_the_page_comes_with_a_content_security_policy(client):
 
     assert "script-src 'self'" in policy
     assert "object-src 'none'" in policy
-    # Client-side routes are the same page.
+    # Client-side routes are the same page, and so is the page asked for by its file name.
     assert client.get('/project/42').headers['content-security-policy'] == policy
+    assert client.get('/index.html').headers['content-security-policy'] == policy
 
 
 def test_frontend_does_not_leave_web_dir(client, web_dir):
